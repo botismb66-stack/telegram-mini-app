@@ -1,0 +1,104 @@
+
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport"
+        content="width=device-width, initial-scale=1">
+  <title>Điểm danh nhân viên</title>
+
+  <script src="https://telegram.org/js/telegram-web-app.js"></script>
+
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      margin: 0;
+      padding: 22px;
+      background: var(--tg-theme-bg-color, #f4f6f8);
+      color: var(--tg-theme-text-color, #222);
+    }
+
+    h2 { margin-bottom: 6px; }
+    .card {
+      padding: 18px;
+      border-radius: 16px;
+      background: var(--tg-theme-secondary-bg-color, white);
+      margin-top: 20px;
+    }
+
+    .status {
+      margin: 14px 0;
+      font-weight: bold;
+    }
+
+    .buttons {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 10px;
+    }
+
+    button {
+      border: 0;
+      border-radius: 10px;
+      padding: 14px 8px;
+      font-size: 15px;
+      cursor: pointer;
+      background: var(--tg-theme-button-color, #2481cc);
+      color: var(--tg-theme-button-text-color, white);
+    }
+
+    .off { background: #c93b42; }
+    .wide { grid-column: 1 / -1; }
+    #message { margin-top: 16px; }
+  </style>
+</head>
+<body>
+  <h2>📋 Điểm danh nhân viên</h2>
+  <div>Mini App trên Telegram</div>
+
+  <div class="card">
+    <div id="user">Đang kiểm tra người dùng...</div>
+    <div class="status" id="status">Trạng thái: Chưa ghi nhận</div>
+
+    <div class="buttons">
+      <button onclick="mark('Lên ca')">🟢 Lên ca</button>
+      <button onclick="mark('Đi ăn')">🍜 Đi ăn</button>
+      <button onclick="mark('Hút thuốc')">🚬 Hút thuốc</button>
+      <button onclick="mark('Vệ sinh')">🚻 Vệ sinh</button>
+      <button onclick="mark('Trở lại')">🔙 Trở lại</button>
+      <button class="off wide" onclick="mark('Xuống ca')">
+        🔴 Xuống ca
+      </button>
+    </div>
+
+    <div id="message">
+      Chọn một nút để thử giao diện.
+    </div>
+  </div>
+
+  <script>
+    const tg = window.Telegram?.WebApp;
+    tg?.ready();
+    tg?.expand();
+
+    const user = tg?.initDataUnsafe?.user;
+
+    document.getElementById('user').textContent = user
+      ? 'Xin chào, ' + (user.first_name || 'nhân viên')
+      : 'Đang xem ở chế độ trình duyệt thử nghiệm';
+
+    function mark(action) {
+      document.getElementById('status').textContent =
+        'Trạng thái: ' + action;
+
+      document.getElementById('message').textContent =
+        'Bạn vừa chọn: ' + action +
+        '. Đây chỉ là bản thử nghiệm, chưa lưu dữ liệu.';
+
+      if (tg) {
+        tg.HapticFeedback?.notificationOccurred('success');
+      }
+    }
+  </script>
+</body>
+</html>
