@@ -2,103 +2,535 @@
 <!DOCTYPE html>
 <html lang="vi">
 <head>
+  <base target="_top">
   <meta charset="UTF-8">
-  <meta name="viewport"
-        content="width=device-width, initial-scale=1">
-  <title>Điểm danh nhân viên</title>
-
+  <meta name="viewport" content="width=device-width, initial-scale=1">
   <script src="https://telegram.org/js/telegram-web-app.js"></script>
-
   <style>
-    body {
-      font-family: Arial, sans-serif;
-      margin: 0;
-      padding: 22px;
-      background: var(--tg-theme-bg-color, #f4f6f8);
-      color: var(--tg-theme-text-color, #222);
+    :root {
+      --bg:#f4f6fb; --card:#fff; --text:#172033;
+      --muted:#718096; --blue:#315ee8; --red:#d43d4d;
     }
-
-    h2 { margin-bottom: 6px; }
-    .card {
-      padding: 18px;
-      border-radius: 16px;
-      background: var(--tg-theme-secondary-bg-color, white);
-      margin-top: 20px;
-    }
-
-    .status {
-      margin: 14px 0;
-      font-weight: bold;
-    }
-
-    .buttons {
-      display: grid;
-      grid-template-columns: 1fr 1fr;
-      gap: 10px;
-    }
-
-    button {
-      border: 0;
-      border-radius: 10px;
-      padding: 14px 8px;
-      font-size: 15px;
-      cursor: pointer;
-      background: var(--tg-theme-button-color, #2481cc);
-      color: var(--tg-theme-button-text-color, white);
-    }
-
-    .off { background: #c93b42; }
-    .wide { grid-column: 1 / -1; }
-    #message { margin-top: 16px; }
+    * { box-sizing:border-box }
+    body { margin:0; background:var(--bg); color:var(--text); font:14px Arial,sans-serif }
+    main { max-width:700px; margin:auto; padding:14px 12px 50px }
+    h1 { font-size:23px; margin:8px 0 }
+    h2 { font-size:17px; margin:0 0 12px }
+    .card { background:var(--card); padding:17px; border-radius:15px; margin:12px 0; border:1px solid #e5e9f2 }
+    .muted { color:var(--muted); line-height:1.5 }
+    .balance { background:#183b83; color:white; padding:22px; border-radius:17px; margin:14px 0 }
+    .balance strong { display:block; font-size:29px; margin:12px 0 }
+    .tabs { display:flex; gap:7px; overflow-x:auto; padding:8px 0 }
+    button { border:0; border-radius:10px; padding:11px 13px; cursor:pointer; font-weight:700 }
+    button:disabled { opacity:.5 }
+    .tabs button { flex-shrink:0; background:#e5eafa }
+    .tabs button.active, .primary { background:var(--blue); color:white }
+    .danger { background:#ffe4e8; color:#b32636 }
+    .secondary { background:#e9efff; color:#2546a9 }
+    .full { width:100%; margin-top:12px }
+    .section { display:none }
+    .section.active { display:block }
+    label { display:block; margin:12px 0 6px; font-weight:700 }
+    input,select,textarea { width:100%; border:1px solid #d7ddeb; border-radius:9px; padding:12px; font:inherit; background:white }
+    textarea { min-height:75px }
+    .item { padding:13px 0; border-bottom:1px solid #e5e9f2 }
+    .row { display:flex; justify-content:space-between; align-items:center; gap:10px }
+    .grid { display:grid; grid-template-columns:1fr 1fr; gap:10px }
+    .pill { font-size:12px; padding:5px 8px; border-radius:20px; background:#eee }
+    .approved { background:#dcf5e7; color:#14734b }
+    .pending { background:#fff0cf; color:#875900 }
+    .rejected { background:#ffe4e8; color:#a52a39 }
+    .notice { padding:13px; border-radius:10px; margin:12px 0; display:none; white-space:pre-wrap }
+    .notice.error { display:block; background:#ffe7e9; color:#a52a39 }
+    .notice.ok { display:block; background:#def5e8; color:#126b47 }
+    a { color:var(--blue) }
+    @media(max-width:420px) { .grid { grid-template-columns:1fr } }
   </style>
 </head>
 <body>
-  <h2>📋 Điểm danh nhân viên</h2>
-  <div>Mini App trên Telegram</div>
+<main>
+  <h1>🚀 Telegram Mini App</h1>
+  <div class="muted">Hệ thống tài khoản và giao dịch</div>
 
-  <div class="card">
-    <div id="user">Đang kiểm tra người dùng...</div>
-    <div class="status" id="status">Trạng thái: Chưa ghi nhận</div>
+  <div id="notice" class="notice"></div>
 
-    <div class="buttons">
-      <button onclick="mark('Lên ca')">🟢 Lên ca</button>
-      <button onclick="mark('Đi ăn')">🍜 Đi ăn</button>
-      <button onclick="mark('Hút thuốc')">🚬 Hút thuốc</button>
-      <button onclick="mark('Vệ sinh')">🚻 Vệ sinh</button>
-      <button onclick="mark('Trở lại')">🔙 Trở lại</button>
-      <button class="off wide" onclick="mark('Xuống ca')">
-        🔴 Xuống ca
-      </button>
-    </div>
-
-    <div id="message">
-      Chọn một nút để thử giao diện.
-    </div>
+  <div id="loading" class="card">
+    <strong id="loadingText">Đang kết nối Telegram...</strong>
+    <p class="muted" id="loadingDetail">Vui lòng chờ.</p>
+    <button id="retryBtn" class="secondary full" style="display:none" onclick="startApp()">Thử kết nối lại</button>
   </div>
 
-  <script>
-    const tg = window.Telegram?.WebApp;
-    tg?.ready();
-    tg?.expand();
+  <div id="app" style="display:none">
+    <div class="card">
+      <div class="muted">Xin chào</div>
+      <h2 id="displayName">...</h2>
+      <div id="username" class="muted"></div>
+    </div>
 
-    const user = tg?.initDataUnsafe?.user;
+    <div class="balance">
+      SỐ DƯ HIỆN TẠI
+      <strong id="balance">0</strong>
+      <div>Số dư khả dụng: <b id="available">0</b></div>
+    </div>
 
-    document.getElementById('user').textContent = user
-      ? 'Xin chào, ' + (user.first_name || 'nhân viên')
-      : 'Đang xem ở chế độ trình duyệt thử nghiệm';
+    <div class="tabs" id="tabs">
+      <button data-tab="home" class="active">Tổng quan</button>
+      <button data-tab="deposit">Nạp tiền</button>
+      <button data-tab="withdraw">Rút tiền</button>
+      <button data-tab="history">Lịch sử</button>
+      <button data-tab="games">Trò chơi</button>
+      <button data-tab="profile">Hồ sơ</button>
+      <button data-tab="admin" id="adminTab" style="display:none">Quản trị</button>
+    </div>
 
-    function mark(action) {
-      document.getElementById('status').textContent =
-        'Trạng thái: ' + action;
+    <section id="home" class="section active">
+      <div class="card">
+        <h2>Thao tác nhanh</h2>
+        <div class="grid">
+          <button class="primary" onclick="showTab('deposit')">＋ Nạp tiền</button>
+          <button class="secondary" onclick="showTab('withdraw')">↗ Rút tiền</button>
+        </div>
+      </div>
+      <div class="card">
+        <h2>Giao dịch gần đây</h2>
+        <div id="recentHistory"></div>
+      </div>
+    </section>
 
-      document.getElementById('message').textContent =
-        'Bạn vừa chọn: ' + action +
-        '. Đây chỉ là bản thử nghiệm, chưa lưu dữ liệu.';
+    <section id="deposit" class="section">
+      <div class="card">
+        <h2>Gửi yêu cầu nạp</h2>
+        <form onsubmit="submitTx(event,'deposit')">
+          <label>Số tiền</label>
+          <input id="depositAmount" type="number" min="1" max="1000000000" step="0.01" required>
+          <label>Phương thức</label>
+          <select id="depositMethod" required>
+            <option value="">Chọn phương thức</option>
+            <option>Chuyển khoản ngân hàng</option>
+            <option>Ví điện tử</option>
+            <option>Phương thức khác</option>
+          </select>
+          <label>Mã giao dịch / ghi chú</label>
+          <textarea id="depositDetails" maxlength="500"></textarea>
+          <button class="primary full" type="submit">Gửi yêu cầu nạp</button>
+        </form>
+      </div>
+    </section>
 
-      if (tg) {
-        tg.HapticFeedback?.notificationOccurred('success');
-      }
+    <section id="withdraw" class="section">
+      <div class="card">
+        <h2>Gửi yêu cầu rút</h2>
+        <p class="muted">Các yêu cầu rút đang chờ sẽ được giữ chỗ trong số dư khả dụng.</p>
+        <form onsubmit="submitTx(event,'withdraw')">
+          <label>Số tiền</label>
+          <input id="withdrawAmount" type="number" min="1" max="1000000000" step="0.01" required>
+          <label>Phương thức</label>
+          <select id="withdrawMethod" required>
+            <option value="">Chọn phương thức</option>
+            <option>Chuyển khoản ngân hàng</option>
+            <option>Ví điện tử</option>
+            <option>Phương thức khác</option>
+          </select>
+          <label>Thông tin nhận tiền</label>
+          <textarea id="withdrawDetails" maxlength="500" required></textarea>
+          <button class="primary full" type="submit">Gửi yêu cầu rút</button>
+        </form>
+      </div>
+    </section>
+
+    <section id="history" class="section">
+      <div class="card">
+        <h2>Lịch sử giao dịch</h2>
+        <div id="allHistory"></div>
+      </div>
+    </section>
+
+    <section id="games" class="section">
+      <div class="card">
+        <h2>Danh sách trò chơi</h2>
+        <div id="gamesList"></div>
+      </div>
+    </section>
+
+    <section id="profile" class="section">
+      <div class="card">
+        <h2>Hồ sơ của tôi</h2>
+        <label>Tên hiển thị</label>
+        <input id="profileName" maxlength="60">
+        <label>Giới thiệu</label>
+        <textarea id="profileBio" maxlength="250"></textarea>
+        <button class="primary full" onclick="saveProfile()">Lưu hồ sơ</button>
+      </div>
+    </section>
+
+    <section id="admin" class="section">
+      <div class="card">
+        <h2>Quản trị giao dịch</h2>
+        <button class="secondary full" onclick="loadAdmin()">Tải danh sách chờ duyệt</button>
+        <div id="adminList"></div>
+      </div>
+    </section>
+  </div>
+</main>
+
+<script>
+'use strict';
+
+const tg = window.Telegram && window.Telegram.WebApp;
+let initData = '';
+let dashboard = null;
+let busy = false;
+let currentTab = 'home';
+
+const $ = id => document.getElementById(id);
+
+function escapeHtml(v) {
+  return String(v == null ? '' : v).replace(/[&<>"']/g, c => ({
+    '&':'&amp;', '<':'&lt;', '>':'&gt;',
+    '"':'&quot;', "'":'&#39;'
+  }[c]));
+}
+
+function money(v) {
+  const n = Number(v);
+  return Number.isFinite(n)
+    ? n.toLocaleString('vi-VN',{maximumFractionDigits:2})
+    : '0';
+}
+
+function safeUrl(v) {
+  try {
+    const u = new URL(String(v));
+    return ['https:','http:'].includes(u.protocol) ? u.href : '';
+  } catch(e) {
+    return '';
+  }
+}
+
+function message(text, error=false) {
+  $('notice').textContent = text;
+  $('notice').className = 'notice ' + (error ? 'error' : 'ok');
+  window.scrollTo({top:0,behavior:'smooth'});
+}
+
+function setBusy(value) {
+  busy = value;
+  document.querySelectorAll('button').forEach(b => b.disabled = value);
+}
+
+function callServer(name, args=[]) {
+  return new Promise((resolve,reject) => {
+    if (!window.google || !google.script || !google.script.run) {
+      reject(new Error(
+        'Không có google.script.run. Hãy mở Web App đã triển khai bằng Apps Script.'
+      ));
+      return;
     }
-  </script>
+
+    try {
+      google.script.run
+        .withSuccessHandler(resolve)
+        .withFailureHandler(err => reject(new Error(
+          err && err.message ? err.message : String(err)
+        )))[name](...args);
+    } catch(e) {
+      reject(e);
+    }
+  });
+}
+
+function showTab(tab) {
+  if (!$ (tab)) return;
+  if (tab === 'admin' && !(dashboard && dashboard.isAdmin)) return;
+
+  currentTab = tab;
+
+  document.querySelectorAll('.section').forEach(el => {
+    el.classList.toggle('active',el.id === tab);
+  });
+
+  document.querySelectorAll('#tabs button').forEach(el => {
+    el.classList.toggle('active',el.dataset.tab === tab);
+  });
+
+  if (tab === 'admin') loadAdmin();
+}
+
+document.querySelectorAll('#tabs button').forEach(btn => {
+  btn.addEventListener('click',() => showTab(btn.dataset.tab));
+});
+
+function pill(status) {
+  const labels = {
+    pending:'Chờ duyệt',
+    approved:'Đã duyệt',
+    rejected:'Từ chối'
+  };
+  const key = ['pending','approved','rejected'].includes(status)
+    ? status : '';
+  return '<span class="pill ' + key + '">' +
+    escapeHtml(labels[status] || status) + '</span>';
+}
+
+function historyHtml(items) {
+  if (!items || !items.length) {
+    return '<p class="muted">Chưa có giao dịch.</p>';
+  }
+
+  return items.map(t => {
+    const deposit = t.type === 'deposit';
+    return '<div class="item">' +
+      '<div class="row"><b>' + (deposit?'Nạp tiền':'Rút tiền') +
+      '</b>' + pill(t.status) + '</div>' +
+      '<h2 style="margin:8px 0">' +
+      (deposit?'+':'−') + money(t.amount) + '</h2>' +
+      '<div class="muted">' + escapeHtml(t.created_at) + '</div>' +
+      '<div class="muted">' + escapeHtml(t.method) + '</div>' +
+      (t.note ? '<div>Ghi chú: ' + escapeHtml(t.note) + '</div>' : '') +
+      '</div>';
+  }).join('');
+}
+
+function gamesHtml(items) {
+  if (!items || !items.length) {
+    return '<p class="muted">Chưa có trò chơi đang hoạt động.</p>';
+  }
+
+  return items.map(g => {
+    const url = safeUrl(g.url);
+    const img = safeUrl(g.image_url);
+    return '<div class="item">' +
+      (img ? '<img src="' + escapeHtml(img) +
+        '" style="width:65px;height:65px;object-fit:cover;border-radius:9px">' : '') +
+      '<h2>' + escapeHtml(g.name) + '</h2>' +
+      '<p class="muted">' + escapeHtml(g.description) + '</p>' +
+      (url ? '<a href="' + escapeHtml(url) +
+        '" target="_blank" rel="noopener noreferrer">Mở trò chơi</a>' : '') +
+      '</div>';
+  }).join('');
+}
+
+function render(data, preserveInputs=false) {
+  if (!data || !data.profile) {
+    throw new Error('Máy chủ không trả về dữ liệu tài khoản hợp lệ.');
+  }
+
+  dashboard = data;
+  const p = data.profile;
+
+  $('displayName').textContent = p.display_name || p.first_name || 'Thành viên';
+  $('username').textContent = p.username
+    ? '@' + p.username
+    : 'Telegram ID: ' + p.telegram_id;
+
+  $('balance').textContent = money(data.balance);
+  $('available').textContent = money(
+    data.available_balance == null ? data.balance : data.available_balance
+  );
+
+  $('recentHistory').innerHTML = historyHtml((data.history || []).slice(0,3));
+  $('allHistory').innerHTML = historyHtml(data.history || []);
+  $('gamesList').innerHTML = gamesHtml(data.games || []);
+
+  if (!preserveInputs) {
+    $('profileName').value = p.display_name || '';
+    $('profileBio').value = p.bio || '';
+  }
+
+  $('adminTab').style.display = data.isAdmin === true ? '' : 'none';
+
+  if (currentTab === 'admin' && !data.isAdmin) showTab('home');
+
+  $('loading').style.display = 'none';
+  $('app').style.display = 'block';
+}
+
+function loadingError(title, detail) {
+  $('loading').style.display = 'block';
+  $('loadingText').textContent = title;
+  $('loadingDetail').textContent = detail;
+  $('retryBtn').style.display = 'block';
+}
+
+async function startApp() {
+  $('retryBtn').style.display = 'none';
+  $('loadingText').textContent = 'Đang kết nối Telegram...';
+  $('loadingDetail').textContent = 'Đang kiểm tra phiên đăng nhập.';
+
+  if (!tg) {
+    loadingError(
+      'Không tìm thấy Telegram Web App',
+      'Không tải được Telegram SDK. Hãy mở Mini App từ bot.'
+    );
+    return;
+  }
+
+  try {
+    tg.ready();
+    tg.expand();
+  } catch(e) {
+    console.warn('Telegram SDK:',e);
+  }
+
+  initData = tg.initData || '';
+
+  if (!initData) {
+    loadingError(
+      'Telegram chưa cung cấp initData',
+      'Mini App không nhận được dữ liệu xác thực. ' +
+      'Hãy kiểm tra URL Menu Button trong BotFather và cách Apps Script nhúng trang.'
+    );
+    return;
+  }
+
+  $('loadingText').textContent = 'Đang tải dữ liệu tài khoản...';
+
+  try {
+    const data = await callServer('getDashboard',[initData]);
+    render(data);
+  } catch(e) {
+    loadingError('Không thể tải tài khoản',e.message);
+    console.error('getDashboard:',e);
+  }
+}
+
+async function refreshData() {
+  const data = await callServer('getDashboard',[initData]);
+  render(data,true);
+}
+
+async function submitTx(event,type) {
+  event.preventDefault();
+  if (busy) return;
+
+  const prefix = type === 'deposit' ? 'deposit' : 'withdraw';
+  const amount = Number($(prefix+'Amount').value);
+  const method = $(prefix+'Method').value.trim();
+  const details = $(prefix+'Details').value.trim();
+
+  if (!Number.isFinite(amount) || amount <= 0 ||
+      amount > 1000000000 ||
+      Math.abs(amount*100-Math.round(amount*100)) > 0.000001) {
+    message('Số tiền không hợp lệ.',true);
+    return;
+  }
+
+  if (!method || (type === 'withdraw' && !details)) {
+    message('Vui lòng nhập đủ thông tin giao dịch.',true);
+    return;
+  }
+
+  setBusy(true);
+
+  try {
+    const result = await callServer('submitTransaction',
+      [initData,type,amount,method,details]);
+
+    event.target.reset();
+    await refreshData();
+    showTab('history');
+    message(result.message || 'Đã gửi yêu cầu.');
+  } catch(e) {
+    message(e.message,true);
+  } finally {
+    setBusy(false);
+  }
+}
+
+async function saveProfile() {
+  if (busy) return;
+  setBusy(true);
+
+  try {
+    const name = $('profileName').value.trim();
+    const bio = $('profileBio').value.trim();
+
+    const result = await callServer('saveMyProfile',
+      [initData,name,bio]);
+
+    await refreshData();
+    message(result.message || 'Đã lưu hồ sơ.');
+  } catch(e) {
+    message(e.message,true);
+  } finally {
+    setBusy(false);
+  }
+}
+
+async function loadAdmin() {
+  if (busy || !dashboard || !dashboard.isAdmin) return;
+
+  $('adminList').textContent = 'Đang tải yêu cầu...';
+
+  try {
+    const data = await callServer('getAdminData',[initData]);
+    const items = data.pending || [];
+
+    if (!items.length) {
+      $('adminList').textContent = 'Không có giao dịch đang chờ.';
+      return;
+    }
+
+    $('adminList').innerHTML = items.map(t => {
+      return '<div class="item">' +
+        '<b>' + (t.type === 'deposit' ? 'Nạp' : 'Rút') +
+        ' · ' + money(t.amount) + '</b>' +
+        '<p class="muted">Mã: ' + escapeHtml(t.id) +
+        '<br>ID: ' + escapeHtml(t.telegram_id) +
+        '<br>Phương thức: ' + escapeHtml(t.method) +
+        '<br>Thông tin: ' + escapeHtml(t.details) + '</p>' +
+        '<input maxlength="500" data-note="' + escapeHtml(t.id) +
+        '" placeholder="Ghi chú quản trị">' +
+        '<div class="grid" style="margin-top:10px">' +
+        '<button class="primary" data-review="approved" data-id="' +
+        escapeHtml(t.id) + '">Duyệt</button>' +
+        '<button class="danger" data-review="rejected" data-id="' +
+        escapeHtml(t.id) + '">Từ chối</button>' +
+        '</div></div>';
+    }).join('');
+
+  } catch(e) {
+    $('adminList').textContent = e.message;
+    message(e.message,true);
+  }
+}
+
+$('adminList').addEventListener('click',event => {
+  const btn = event.target.closest('button[data-review]');
+  if (!btn) return;
+  reviewTx(btn.dataset.id,btn.dataset.review);
+});
+
+async function reviewTx(id,decision) {
+  if (busy || !dashboard || !dashboard.isAdmin) return;
+
+  const noteInput = [...$('adminList').querySelectorAll('input[data-note]')]
+    .find(el => el.dataset.note === id);
+
+  const note = noteInput ? noteInput.value : '';
+
+  if (!confirm(decision === 'approved'
+    ? 'Xác nhận DUYỆT giao dịch?'
+    : 'Xác nhận TỪ CHỐI giao dịch?')) return;
+
+  setBusy(true);
+
+  try {
+    const result = await callServer('reviewTransaction',
+      [initData,id,decision,note]);
+
+    await refreshData();
+    message(result.message || 'Đã xử lý giao dịch.');
+  } catch(e) {
+    message(e.message,true);
+  } finally {
+    setBusy(false);
+  }
+
+  if (dashboard && dashboard.isAdmin) loadAdmin();
+}
+
+startApp();
+</script>
 </body>
 </html>
