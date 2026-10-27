@@ -441,8 +441,8 @@ function callServer(method, args, onSuccess, onFailure) {
       renderHistory((data.history || []).slice(0, 3));
     document.getElementById('allHistory').innerHTML =
       renderHistory(data.history || []);
-    document.getElementById('gamesList').innerHTML =
-      renderGames(data.games || []);
+    const gamesList = document.getElementById('gamesList');
+    if (gamesList) gamesList.innerHTML = renderGames(data.games || []);
     document.getElementById('profileName').value = p.display_name || '';
     document.getElementById('profileBio').value = p.bio || '';
     const link = data.member_link || {};
@@ -509,18 +509,7 @@ function refresh() {
       document.getElementById('spHistory').innerHTML=(d.history||[]).map(b=>'<div class="item">'+escapeHtml(b.matchId)+' · '+escapeHtml(b.pick)+' · '+spFmt(b.stake)+' điểm · '+escapeHtml(b.status)+' · Nhận '+spFmt(b.payout)+'</div>').join('')||'<p class="muted">Chưa có dự đoán.</p>';
       const adminEl=document.getElementById('spAdminMatches');
       if(d.isAdmin)adminEl.innerHTML='<h2 style="margin-top:18px">Chốt kết quả / sửa tỷ lệ</h2>'+(d.matches||[]).filter(m=>m.status==='open'||m.status==='closed').map(m=>'<div class="item"><strong>'+escapeHtml(m.home)+' — '+escapeHtml(m.away)+'</strong><p class="muted small">'+escapeHtml(m.id)+' · '+escapeHtml(m.kickoff)+'</p><button class="secondary" onclick="sportsOdds(&quot;'+escapeHtml(m.id)+'&quot;)">Sửa tỷ lệ</button> <button class="secondary" onclick="sportsSettle(&quot;'+escapeHtml(m.id)+'&quot;)">Chốt kết quả</button></div>').join('');
-    }).catch(e => {
-  console.error('Lỗi tải trận đấu:', e);
-
-  document.getElementById('spMatches').innerHTML =
-    '<p style="color:red">Không tải được trận đấu: ' +
-    escapeHtml(e.message || String(e)) +
-    '</p>';
-
-  document.getElementById('spBalance').textContent = 'Lỗi tải';
-
-  notify(e.message || String(e), true);
-});
+    }).catch(e=>notify(e.message,true));
   }
   function sportsBet(id){const stake=Number(document.getElementById('stake-'+id).value),pick=document.getElementById('pick-'+id).value;
     if(!Number.isSafeInteger(stake)||stake<10||stake>10000){notify('Nhập 10-10.000 điểm demo.',true);return;}
