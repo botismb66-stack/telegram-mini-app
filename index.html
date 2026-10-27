@@ -1,647 +1,1311 @@
 
+
 <!DOCTYPE html>
+
 <html lang="vi">
+
 <head>
+
   <base target="_top">
+
   <meta charset="UTF-8">
+
   <meta name="viewport" content="width=device-width, initial-scale=1">
+
   <script src="https://telegram.org/js/telegram-web-app.js"></script>
+
   <style>
+
     :root {
+
       color-scheme: light;
+
       --bg: #f3f5f9;
+
       --card: #ffffff;
+
       --text: #172033;
+
       --muted: #6c7485;
+
       --primary: #315ee8;
+
       --line: #e5e9f1;
+
       --green: #16865c;
+
       --red: #c23e4b;
+
     }
+
     * { box-sizing: border-box; }
+
     body {
+
       margin: 0; background: var(--bg); color: var(--text);
+
       font-family: Arial, sans-serif; font-size: 14px;
+
     }
+
     main { max-width: 720px; margin: auto; padding: 16px 14px 40px; }
+
     h1 { font-size: 23px; margin: 4px 0 6px; }
+
     h2 { font-size: 17px; margin: 0 0 14px; }
+
     p { line-height: 1.5; }
+
     .muted { color: var(--muted); }
+
     .card {
+
       background: var(--card); border: 1px solid var(--line);
+
       border-radius: 16px; padding: 16px; margin: 12px 0;
+
     }
+
     .balance {
+
       background: #183b83; color: white; border: 0;
+
       padding: 22px; border-radius: 18px; margin-top: 18px;
+
     }
+
     .balance .amount { font-size: 30px; font-weight: 700; margin: 10px 0; }
+
     .row { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+
     .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+
     label { display: block; font-weight: 600; margin: 12px 0 6px; }
+
     input, select, textarea {
+
       width: 100%; padding: 12px; border: 1px solid #d7dce6;
+
       border-radius: 10px; font: inherit; background: white; color: #172033;
+
     }
+
     textarea { min-height: 70px; resize: vertical; }
+
     button {
+
       border: 0; border-radius: 10px; padding: 12px 14px;
+
       font-weight: 700; cursor: pointer; font-size: 14px;
+
     }
+
     button:disabled { opacity: .5; cursor: wait; }
+
     .primary { background: var(--primary); color: white; }
+
     .secondary { background: #e9efff; color: #2449bd; }
+
     .danger { background: #ffeaed; color: #a62b3a; }
+
     .full { width: 100%; margin-top: 12px; }
+
     .tabs { display: flex; flex-wrap: wrap; gap: 8px; margin: 14px 0; }
+
     .tabs button { background: #e7ebf4; color: #38445a; }
+
     .tabs button.active { background: var(--primary); color: white; }
+
     .item { padding: 12px 0; border-bottom: 1px solid var(--line); }
+
     .item:last-child { border-bottom: 0; }
+
     .pill {
+
       display: inline-block; padding: 5px 8px; border-radius: 99px;
+
       background: #edf0f5; font-size: 12px; font-weight: 700;
+
     }
+
     .approved { background: #e0f5e9; color: #126c48; }
+
     .pending { background: #fff2d5; color: #895a00; }
+
     .rejected { background: #ffe7e9; color: #a62b3a; }
+
     .message { padding: 12px; margin: 10px 0; border-radius: 10px; display: none; }
+
     .message.error { background: #ffe7e9; color: #a62b3a; }
+
     .message.ok { background: #e0f5e9; color: #126c48; }
+
     .game { display: flex; gap: 12px; align-items: flex-start; }
+
     .game img { width: 68px; height: 68px; object-fit: cover; border-radius: 12px; }
+
     .game .placeholder {
+
       width: 68px; height: 68px; border-radius: 12px; background: #e9edfa;
+
       display: grid; place-items: center; font-size: 26px;
+
     }
+
     .section { display: none; }
+
     .section.active { display: block; }
+
     .small { font-size: 12px; }
+
     @media (max-width: 420px) {
+
       main { padding: 12px 10px 30px; }
+
       .grid { grid-template-columns: 1fr; }
+
     }
+
   </style>
+
 </head>
+
 <body>
+
 <main>
+
   <header>
+
     <h1>Mini App</h1>
+
     <div class="muted">Không gian tài khoản của bạn</div>
+
   </header>
 
+
+
   <div id="message" class="message"></div>
+
   <div id="loading" class="card">Đang kết nối với Telegram...</div><button id="retry" class="secondary full" style="display:none" onclick="refresh()">Thử kết nối lại</button>
+
   <div id="app" style="display:none">
+
     <div class="card">
+
       <div class="row">
+
         <div>
+
           <div class="muted">Xin chào</div>
+
           <h2 id="displayName" style="margin:5px 0"></h2>
+
           <div id="username" class="muted"></div>
+
         </div>
+
         <div style="font-size:32px">👤</div>
+
       </div>
+
     </div>
+
+
 
     <div class="balance">
+
       <div>SỐ DƯ HIỆN TẠI</div>
+
       <div class="amount" id="balance">0</div>
+
       <div class="small">Số dư đã duyệt · Khả dụng: <strong id="availableBalance">0</strong></div>
+
     </div>
+
+
 
     <div class="tabs">
+
       <button class="active" data-tab="home">Tổng quan</button>
+
       <button data-tab="deposit">Nạp tiền</button>
+
       <button data-tab="withdraw">Rút tiền</button>
+
       <button data-tab="history">Lịch sử</button>
+
       <button data-tab="games">Trò chơi</button>
+
       <button data-tab="profile">Hồ sơ</button>
+
       <button data-tab="admin" id="adminTab" style="display:none">Quản trị</button>
+
     </div>
 
+
+
     <section id="home" class="section active">
+
       <div class="card">
+
         <h2>Thao tác nhanh</h2>
+
         <div class="grid">
+
           <button class="primary" onclick="showTab('deposit')">＋ Gửi yêu cầu nạp</button>
+
           <button class="secondary" onclick="showTab('withdraw')">↗ Gửi yêu cầu rút</button>
+
         </div>
+
       </div>
+
       <div class="card">
+
         <div class="row">
+
           <h2>Giao dịch gần đây</h2>
+
           <button class="secondary" onclick="showTab('history')">Xem tất cả</button>
+
         </div>
+
         <div id="recentHistory"></div>
+
       </div>
+
     </section>
+
+
 
     <section id="deposit" class="section">
+
       <div class="card">
+
         <h2>Yêu cầu nạp tiền</h2>
+
         <p class="muted">Gửi thông tin nạp tiền. Số dư chỉ thay đổi sau khi quản trị viên duyệt.</p>
+
         <div id="bankInfo" class="card" style="background:#f7f9ff;margin:12px 0">
+
           <strong>Thông tin nhận chuyển khoản</strong>
+
           <p class="muted">Đang tải thông tin ngân hàng...</p>
+
         </div>
+
         <form onsubmit="submitTx(event, 'deposit')">
+
           <label>Số tiền đã chuyển</label>
+
           <input id="depositAmount" type="number" min="1" step="any" required placeholder="Nhập số tiền">
+
           <label>Phương thức nạp</label>
+
           <select id="depositMethod" required>
+
             <option value="Chuyển khoản ngân hàng">Chuyển khoản ngân hàng</option>
+
           </select>
+
           <label>Mã giao dịch / nội dung chuyển khoản</label>
+
           <textarea id="depositDetails" maxlength="500" required placeholder="Nhập mã giao dịch hoặc nội dung đã chuyển"></textarea>
+
           <p class="muted small">Chỉ gửi yêu cầu sau khi đã chuyển khoản. Admin kiểm tra tiền thực nhận trước khi duyệt.</p>
+
           <button class="primary full" type="submit" id="depositSubmit" disabled>Gửi yêu cầu nạp</button>
+
         </form>
+
       </div>
+
     </section>
+
+
 
     <section id="withdraw" class="section">
+
       <div class="card">
+
         <h2>Yêu cầu rút tiền</h2>
+
         <p class="muted">Yêu cầu sẽ chờ quản trị viên kiểm tra. Số dư không bị trừ cho đến khi duyệt.</p>
+
         <form onsubmit="submitTx(event, 'withdraw')">
+
           <label>Số tiền</label>
+
           <input id="withdrawAmount" type="number" min="1" step="any" required placeholder="Nhập số tiền">
+
           <label>Phương thức nhận tiền</label>
+
           <select id="withdrawMethod" required>
+
             <option value="">Chọn phương thức</option>
+
             <option>Chuyển khoản ngân hàng</option>
+
             <option>Ví điện tử</option>
+
             <option>Phương thức khác</option>
+
           </select>
+
           <label>Thông tin nhận tiền</label>
+
           <textarea id="withdrawDetails" maxlength="500" required placeholder="Nhập thông tin cần thiết"></textarea>
+
           <button class="primary full" type="submit">Gửi yêu cầu rút</button>
+
         </form>
+
       </div>
+
     </section>
+
+
 
     <section id="history" class="section">
+
       <div class="card">
+
         <h2>Lịch sử giao dịch</h2>
+
         <div id="allHistory"></div>
+
       </div>
+
     </section>
+
+
 
     <section id="games" class="section">
+
       <div class="card"><h2>⚽ Dự đoán thể thao</h2>
+
         <p class="muted">Tiền đặt cược được trừ trực tiếp từ ví chính. Thắng hoặc hoàn cược sẽ được cộng lại vào ví chính.</p>
+
         <h2>Số dư ví chính: <span id="spBalance">...</span></h2>
+
         <button class="secondary" onclick="loadSports()">Làm mới trận đấu</button>
+
         <div id="spMatches">Đang tải...</div>
+
       </div>
+
       <div class="card"><h2>Lịch sử dự đoán</h2><div id="spHistory"></div></div>
+
     </section>
+
+
 
     <section id="profile" class="section">
+
       <div class="card">
+
         <h2>Thông tin hồ sơ</h2>
+
         <label>Tên hiển thị</label>
+
         <input id="profileName" maxlength="60" placeholder="Tên hiển thị">
+
         <label>Giới thiệu</label>
+
         <textarea id="profileBio" maxlength="250" placeholder="Giới thiệu về bạn"></textarea>
+
         <button class="primary full" onclick="saveProfile()">Lưu hồ sơ</button>
+
       </div>
+
       <div class="card">
+
         <h2>Thông tin liên kết</h2>
-        <p class="muted">Thông tin dùng để nhận tiền khi rút. Tài khoản ngân hàng sau khi lưu cần Admin xác minh nếu muốn đổi.</p>
+          <div id="memberLinkNotice" class="muted small" role="status"></div>
+
+        <p class="muted">Thông tin chỉ được đăng ký một lần. Nếu muốn cập nhật, vui lòng liên hệ Admin để được hỗ trợ.</p>
+
         <label>Số điện thoại</label>
+
         <input id="memberPhone" type="tel" maxlength="16" placeholder="VD: 0912345678" autocomplete="tel">
+
         <label>Ngân hàng</label>
+
         <input id="memberBankName" maxlength="80" placeholder="VD: Vietcombank" autocomplete="off">
+
         <label>Số tài khoản ngân hàng</label>
+
         <input id="memberBankAccount" inputmode="numeric" maxlength="25" placeholder="Nhập số tài khoản" autocomplete="off">
+
         <label>Tên chủ tài khoản</label>
+
         <input id="memberBankHolder" maxlength="100" placeholder="NGUYEN VAN A" autocomplete="off">
-        <button class="primary full" onclick="saveMemberLinkInfo()">LƯU THÔNG TIN LIÊN KẾT</button>
+
+        <button id="memberLinkSave" class="primary full" onclick="saveMemberLinkInfo()">LƯU THÔNG TIN LIÊN KẾT</button>
+
       </div>
+
     </section>
+
+
 
     <section id="admin" class="section">
+
       <div class="card" id="adminFinance" style="display:none">
+
         <div class="row">
+
           <h2>Duyệt nạp / rút tiền</h2>
+
           <button class="secondary" onclick="loadAdmin()">Tải lại</button>
+
         </div>
+
         <p class="muted">Dành cho tài khoản có role admin hoặc finance (status = active).</p>
+
         <div id="adminList"></div>
+
       </div>
+
       <div class="card" id="adminSports" style="display:none">
+
         <p class="muted">Dành cho tài khoản có role admin hoặc odds (status = active).</p>
+
         <div class="card" style="background:#f7f9ff">
+
           <h2>⚽ Quản lý trận đấu và tỷ lệ</h2>
+
           <label>Giải đấu</label><input id="spLeague" placeholder="Premier League">
+
           <div class="grid"><div><label>Đội chủ nhà</label><input id="spHome" placeholder="Arsenal"></div><div><label>Đội khách</label><input id="spAway" placeholder="Chelsea"></div></div>
+
           <label>Giờ bắt đầu trận (giờ địa phương)</label><input id="spKickoff" type="datetime-local">
+
           <div class="grid"><div><label>Tỷ lệ chủ nhà</label><input id="spOH" type="number" step="0.01" placeholder="1.85"></div><div><label>Tỷ lệ hòa</label><input id="spOD" type="number" step="0.01" placeholder="3.20"></div></div>
+
           <label>Tỷ lệ đội khách</label><input id="spOA" type="number" step="0.01" placeholder="2.10">
+
           <button class="primary full" onclick="sportsCreate()">Tạo trận thủ công</button>
+
           <div class="grid" style="margin-top:10px"><button class="secondary" onclick="sportsSync('spSyncFixturesAdmin')">Đồng bộ lịch API</button><button class="secondary" onclick="sportsSync('spSyncResultsAdmin')">Đồng bộ kết quả API</button></div>
+
           <div id="spAdminMatches"></div>
+
         </div>
+
       </div>
+
     </section>
+
   </div>
+
 </main>
 
+
+
 <script>
+
   const tg = window.Telegram && window.Telegram.WebApp;
+
   let dashboard = null;
+
   let busy = false;
 
+
+
   if (tg) {
+
     tg.ready();
+
     tg.expand();
+
   }
+
+
 
   function escapeHtml(value) {
+
     return String(value == null ? '' : value).replace(/[&<>"']/g, ch => ({
+
       '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
+
     })[ch]);
+
   }
+
+
 
   function money(value) {
+
     return Number(value || 0).toLocaleString('vi-VN', {
+
       maximumFractionDigits: 2
+
     });
+
   }
+
+
 
   function notify(text, isError) {
+
     const el = document.getElementById('message');
+
     el.textContent = text;
+
     el.className = 'message ' + (isError ? 'error' : 'ok');
+
     el.style.display = 'block';
+
     window.scrollTo({ top: 0, behavior: 'smooth' });
+
   }
+
+
 
   function setBusy(value) {
+
     busy = value;
+
     document.querySelectorAll('button').forEach(b => b.disabled = value);
+
     if (!value) {
+
       const depositButton = document.getElementById('depositSubmit');
+
       if (depositButton && depositButton.dataset.configured !== '1') depositButton.disabled = true;
+      const linkButton = document.getElementById('memberLinkSave');
+      if (linkButton && linkButton.dataset.linked === '1') linkButton.disabled = true;
+
     }
+
   }
 
-  
+
+
+
+
 // GitHub Pages -> Cloudflare Worker -> Apps Script HTTP API -> Google Sheets.
+
 const API_URL = 'https://mb66-miniapp-api.botismb66-a7c.workers.dev/api';
 
+
+
 async function rpc(method, args) {
+
   const controller = new AbortController();
+
   const timer = setTimeout(() => controller.abort(), 45000);
+
   try {
+
     const response = await fetch(API_URL, {
+
       method: 'POST',
+
       headers: { 'Content-Type': 'application/json' },
+
       body: JSON.stringify({ method, args }),
+
       cache: 'no-store',
+
       signal: controller.signal
+
     });
+
     let data;
+
     try {
+
       data = await response.json();
+
     } catch (_) {
+
       throw new Error('Worker không trả về JSON hợp lệ (HTTP ' + response.status + ').');
+
     }
+
     if (!response.ok || !data || data.ok !== true) {
+
       throw new Error((data && data.error) || 'API lỗi HTTP ' + response.status);
+
     }
+
     return data.result;
+
   } catch (error) {
+
     if (error.name === 'AbortError') {
+
       throw new Error('Kết nối API quá 45 giây. Vui lòng thử lại.');
+
     }
+
     throw error;
+
   } finally {
+
     clearTimeout(timer);
+
   }
+
 }
+
+
 
 function callServer(method, args, onSuccess, onFailure) {
+
   setBusy(true);
+
   rpc(method, args).then(result => {
+
     setBusy(false);
+
     if (onSuccess) onSuccess(result);
+
   }).catch(error => {
+
     setBusy(false);
+
     if (onFailure) onFailure(error);
+
     else notify(error.message || String(error), true);
+
   });
+
 }
 
+
+
   function showTab(tab) {
+
     document.querySelectorAll('.section').forEach(el => el.classList.remove('active'));
+
     document.querySelectorAll('.tabs button').forEach(el => {
+
       el.classList.toggle('active', el.dataset.tab === tab);
+
     });
+
     document.getElementById(tab).classList.add('active');
+
     if (tab === 'games' || tab === 'admin') loadSports();
+
     if (tab === 'admin' && dashboard && dashboard.roles && dashboard.roles.finance) loadAdmin();
+
   }
+
+
 
   document.querySelectorAll('.tabs button').forEach(btn => {
+
     btn.addEventListener('click', () => showTab(btn.dataset.tab));
+
   });
 
+
+
   function statusLabel(status) {
+
     const labels = {
+
       pending: 'Đang chờ duyệt',
+
       approved: 'Đã duyệt',
+
       rejected: 'Đã từ chối'
+
     };
+
     return labels[status] || status;
+
   }
+
+
 
   function statusPill(status) {
+
     return '<span class="pill ' + escapeHtml(status) + '">' +
+
       escapeHtml(statusLabel(status)) + '</span>';
+
   }
+
+
 
   function renderHistory(items) {
+
     if (!items || !items.length) return '<p class="muted">Chưa có giao dịch.</p>';
+
     return items.map(tx => {
+
       const isDeposit = tx.type === 'deposit';
+
       const title = isDeposit ? 'Nạp tiền' : 'Rút tiền';
+
       return '<div class="item">' +
+
         '<div class="row"><strong>' + title + '</strong>' +
+
         statusPill(tx.status) + '</div>' +
+
         '<div style="margin:7px 0;font-size:18px;font-weight:700">' +
+
         (isDeposit ? '+' : '−') + money(tx.amount) + '</div>' +
+
         '<div class="muted small">' + escapeHtml(tx.created_at) + '</div>' +
+
         '<div class="muted small">' + escapeHtml(tx.method || '') +
+
         (tx.note ? ' · Ghi chú: ' + escapeHtml(tx.note) : '') + '</div>' +
+
         '</div>';
+
     }).join('');
+
   }
+
+
 
   function renderGames(items) {
+
     if (!items || !items.length) {
+
       return '<p class="muted">Chưa có game. Hãy thêm dữ liệu vào sheet Games.</p>';
+
     }
+
     return items.map(g => {
+
       const safeImage = /^https:\/\//i.test(String(g.image_url || '')) ? g.image_url : '';
+
       const safeUrl = /^https:\/\//i.test(String(g.url || '')) ? g.url : '';
+
       const image = safeImage
+
         ? '<img src="' + escapeHtml(g.image_url) + '" alt="">'
+
         : '<div class="placeholder">🎮</div>';
+
       return '<div class="item game">' + image + '<div style="flex:1">' +
+
         '<strong>' + escapeHtml(g.name) + '</strong>' +
+
         '<p class="muted">' + escapeHtml(g.description || '') + '</p>' +
+
         (safeUrl ? '<a href="' + escapeHtml(safeUrl) +
+
         '" target="_blank" rel="noopener noreferrer">Mở trò chơi ↗</a>' : '') +
+
         '</div></div>';
+
     }).join('');
+
   }
+
+
 
   function renderBankInfo(bank) {
+
     const el = document.getElementById('bankInfo');
+
     const submit = document.getElementById('depositSubmit');
+
     if (!bank || !bank.bank_name || !bank.account_name || !bank.account_number) {
+
       el.innerHTML = '<strong>Thông tin nhận chuyển khoản</strong><p class="muted">Chưa cấu hình tài khoản ngân hàng. Vui lòng liên hệ quản trị viên.</p>';
+
       submit.dataset.configured = '0';
+
       submit.disabled = true;
+
       return;
+
     }
+
     const qr = /^https:\/\//i.test(String(bank.qr_image_url || ''))
+
       ? '<img src="' + escapeHtml(bank.qr_image_url) + '" alt="Mã QR chuyển khoản" style="display:block;width:220px;max-width:100%;margin:12px auto;border-radius:10px">'
+
       : '<p class="muted">Chưa có ảnh QR. Có thể chuyển khoản bằng số tài khoản bên dưới.</p>';
+
     el.innerHTML = '<strong>Thông tin nhận chuyển khoản</strong>' + qr +
+
       '<p>Ngân hàng: <strong>' + escapeHtml(bank.bank_name) + '</strong></p>' +
+
       '<p>Chủ tài khoản: <strong>' + escapeHtml(bank.account_name) + '</strong></p>' +
+
       '<p>Số tài khoản: <strong>' + escapeHtml(bank.account_number) + '</strong></p>' +
+
       '<p>Nội dung chuyển khoản: <strong>' + escapeHtml(bank.transfer_content || '') + '</strong></p>';
+
     submit.dataset.configured = '1';
+
     submit.disabled = false;
+
   }
+
+
 
   function renderDashboard(data) {
+
     dashboard = data;
+
     renderBankInfo(data.bank_account);
+
     document.getElementById('loading').style.display = 'none';
+
     document.getElementById('retry').style.display = 'none';
+
     document.getElementById('app').style.display = 'block';
 
+
+
     const p = data.profile || {};
+
     document.getElementById('displayName').textContent =
+
       p.display_name || p.first_name || 'Người dùng';
+
     document.getElementById('username').textContent =
+
       p.username ? '@' + p.username : 'Telegram ID: ' + p.telegram_id;
+
     document.getElementById('balance').textContent = money(data.balance);
+
     document.getElementById('availableBalance').textContent = money(data.available_balance == null ? data.balance : data.available_balance);
+
     const roles = data.roles || { finance: false, sports: false };
+
     document.getElementById('adminTab').style.display = (roles.finance || roles.sports) ? '' : 'none';
+
     document.getElementById('adminFinance').style.display = roles.finance ? '' : 'none';
+
     document.getElementById('adminSports').style.display = roles.sports ? '' : 'none';
+
     document.getElementById('recentHistory').innerHTML =
+
       renderHistory((data.history || []).slice(0, 3));
+
     document.getElementById('allHistory').innerHTML =
+
       renderHistory(data.history || []);
+
     const gamesList = document.getElementById('gamesList');
+
     if (gamesList) gamesList.innerHTML = renderGames(data.games || []);
+
     document.getElementById('profileName').value = p.display_name || '';
+
     document.getElementById('profileBio').value = p.bio || '';
+
     const link = data.member_link || {};
+
     document.getElementById('memberPhone').value = link.phone_number || '';
+
     document.getElementById('memberBankName').value = link.bank_name || '';
+
     document.getElementById('memberBankAccount').value = link.bank_account || '';
+
     document.getElementById('memberBankHolder').value = link.bank_holder || '';
+
+    // Khóa toàn bộ thông tin liên kết ngay khi đã đăng ký một phần hoặc toàn bộ.
+    const linked = ['phone_number','bank_name','bank_account','bank_holder']
+      .some(key => String(link[key] || '').trim() !== '');
+    ['memberPhone','memberBankName','memberBankAccount','memberBankHolder']
+      .forEach(id => { document.getElementById(id).readOnly = linked; });
+    const saveLinkButton = document.getElementById('memberLinkSave');
+    saveLinkButton.dataset.linked = linked ? '1' : '0';
+    saveLinkButton.textContent = linked ? 'THÔNG TIN ĐÃ LIÊN KẾT' : 'LƯU THÔNG TIN LIÊN KẾT';
+    saveLinkButton.disabled = linked;
+    document.getElementById('memberLinkNotice').textContent = linked
+      ? 'Thông tin đã được liên kết. Nếu muốn cập nhật, vui lòng liên hệ Admin để được hỗ trợ.'
+      : 'Vui lòng kiểm tra kỹ trước khi lưu. Sau khi đăng ký, bạn không thể tự thay đổi.';
+
     if (link.bank_account) {
+
       document.getElementById('withdrawMethod').value = 'Chuyển khoản ngân hàng';
+
       document.getElementById('withdrawDetails').value =
+
         [link.bank_name, link.bank_account, link.bank_holder].filter(Boolean).join(' | ');
+
     }
+
   }
 
-  
+
+
+
+
 function refresh() {
+
   const loading = document.getElementById('loading');
 
+
+
   if (!window.Telegram || !window.Telegram.WebApp) {
+
     loading.textContent = 'Không thể kết nối với Telegram Web App.';
+
     return;
+
   }
+
+
 
   const tg = window.Telegram.WebApp;
+
   tg.ready();
+
   tg.expand();
 
+
+
   if (!tg.initData) {
+
     loading.textContent =
+
       'Telegram chưa cung cấp dữ liệu xác thực. Hãy đóng Mini App và mở lại từ nút Menu của bot.';
+
     return;
+
   }
+
+
 
   loading.textContent = 'Đang tải dữ liệu tài khoản...';
 
+
+
   callServer(
+
     'getDashboard',
+
     [tg.initData],
+
     function(data) {
+
       renderDashboard(data);
+
     },
+
     function(error) {
+
       loading.textContent =
+
         'Không tải được dữ liệu: ' +
+
         (error && error.message ? error.message : String(error));
+
       document.getElementById('retry').style.display = 'block';
+
       console.error('Lỗi getDashboard:', error);
+
     }
+
   );
+
 }
 
+
+
   let sportsData=null;
+
   function spFmt(n){return Number(n||0).toLocaleString('vi-VN',{maximumFractionDigits:2});}
+
   function loadSports(){
+
     if(!tg||!tg.initData)return;
+
     rpc('spData',[tg.initData]).then(d=>{sportsData=d;
+
       document.getElementById('spBalance').textContent=spFmt(d.balance);
+
       const now=Date.now();
+
       document.getElementById('spMatches').innerHTML=(d.matches||[]).map(m=>{
+
         const active=m.status==='open'&&Date.parse(m.kickoff)>now&&m.homeOdds>1&&m.drawOdds>1&&m.awayOdds>1;
+
         return '<div class="item"><strong>'+escapeHtml(m.league)+'</strong><p>'+escapeHtml(m.home)+' — '+escapeHtml(m.away)+'</p><p class="muted small">'+escapeHtml(m.kickoff)+' · '+escapeHtml(m.status)+'</p>'+
+
         (active?'<select id="pick-'+escapeHtml(m.id)+'"><option value="home">Chủ nhà '+spFmt(m.homeOdds)+'</option><option value="draw">Hòa '+spFmt(m.drawOdds)+'</option><option value="away">Đội khách '+spFmt(m.awayOdds)+'</option></select><input type="number" min="10" max="10000" step="1" value="100" id="stake-'+escapeHtml(m.id)+'" placeholder="Số tiền cược"><button class="primary full" onclick="sportsBet(&quot;'+escapeHtml(m.id)+'&quot;)">Dự đoán</button>':'<p class="muted small">Chưa nhận dự đoán / chưa có tỷ lệ</p>')+'</div>';
+
       }).join('')||'<p class="muted">Chưa có trận đấu. Admin tạo trận hoặc đồng bộ API.</p>';
+
       document.getElementById('spHistory').innerHTML=(d.history||[]).map(b=>'<div class="item">'+escapeHtml(b.matchId)+' · '+escapeHtml(b.pick)+' · '+spFmt(b.stake)+' · '+escapeHtml(b.status)+' · Nhận '+spFmt(b.payout)+'</div>').join('')||'<p class="muted">Chưa có dự đoán.</p>';
+
       const adminEl=document.getElementById('spAdminMatches');
+
       if(d.isAdmin)adminEl.innerHTML='<h2 style="margin-top:18px">Chốt kết quả / sửa tỷ lệ</h2>'+(d.matches||[]).filter(m=>m.status==='open'||m.status==='closed').map(m=>'<div class="item"><strong>'+escapeHtml(m.home)+' — '+escapeHtml(m.away)+'</strong><p class="muted small">'+escapeHtml(m.id)+' · '+escapeHtml(m.kickoff)+'</p><button class="secondary" onclick="sportsOdds(&quot;'+escapeHtml(m.id)+'&quot;)">Sửa tỷ lệ</button> <button class="secondary" onclick="sportsSettle(&quot;'+escapeHtml(m.id)+'&quot;)">Chốt kết quả</button></div>').join('');
+
     }).catch(e=>notify(e.message,true));
+
   }
+
   function sportsBet(id){const stake=Number(document.getElementById('stake-'+id).value),pick=document.getElementById('pick-'+id).value;
+
     if(!Number.isSafeInteger(stake)||stake<10||stake>10000){notify('Nhập số tiền từ 10 đến 10.000.',true);return;}
+
     if(!confirm('Xác nhận đặt '+spFmt(stake)+' từ ví chính?'))return;
+
     callServer('spBet',[tg.initData,id,pick,stake],r=>{notify(r.message,false);loadSports();refresh();});
+
   }
+
   function sportsCreate(){const v=x=>document.getElementById(x).value;const date=new Date(v('spKickoff'));
+
     if(!Number.isFinite(date.getTime())){notify('Chọn giờ bắt đầu.',true);return;}
+
     callServer('spAdminCreate',[tg.initData,v('spLeague'),v('spHome'),v('spAway'),date.toISOString(),v('spOH'),v('spOD'),v('spOA')],r=>{notify(r.message,false);loadSports();});
+
   }
+
   function sportsOdds(id){const s=prompt('Nhập 3 tỷ lệ: chủ nhà, hòa, khách (cách nhau dấu phẩy)');if(!s)return;const a=s.split(',').map(x=>Number(x.trim()));if(a.length!==3||a.some(x=>!Number.isFinite(x)||x<=1)){notify('Tỷ lệ không hợp lệ.',true);return;}
+
     callServer('spAdminOdds',[tg.initData,id,...a],r=>{notify(r.message,false);loadSports();});
+
   }
+
   function sportsSettle(id){const s=prompt('Kết quả: home (chủ nhà), draw (hòa), away (khách), void (hủy)');if(!s)return;
+
     if(!confirm('Chốt kết quả '+s+'? Không thể sửa sau khi đã trả thưởng.'))return;
+
     callServer('spAdminSettle',[tg.initData,id,s],r=>{notify(r.message,false);loadSports();});
+
   }
+
   function sportsSync(method){callServer(method,[tg.initData],r=>{notify(r.message,false);loadSports();});}
 
+
+
   function submitTx(event, type) {
+
     event.preventDefault();
+
     if (busy) return;
+
     if (type === 'deposit' && document.getElementById('depositSubmit').dataset.configured !== '1') {
+
       notify('Chưa cấu hình tài khoản nhận tiền.', true);
+
       return;
+
     }
+
+
 
     const prefix = type === 'deposit' ? 'deposit' : 'withdraw';
+
     const amount = document.getElementById(prefix + 'Amount').value;
+
     const method = document.getElementById(prefix + 'Method').value;
+
     const details = document.getElementById(prefix + 'Details').value;
 
+
+
     if (!amount || Number(amount) <= 0) {
+
       notify('Vui lòng nhập số tiền hợp lệ.', true);
+
+      return;
+
+    }
+
+
+
+    callServer('submitTransaction',
+
+      [tg.initData, type, amount, method, details],
+
+      result => {
+
+        notify(result.message || 'Đã gửi yêu cầu.', false);
+
+        event.target.reset();
+
+        showTab('history');
+
+        refresh();
+
+      }
+
+    );
+
+  }
+
+
+
+  function saveProfile() {
+
+    const name = document.getElementById('profileName').value;
+
+    const bio = document.getElementById('profileBio').value;
+
+    callServer('saveMyProfile', [tg.initData, name, bio], () => {
+
+      notify('Đã lưu hồ sơ.', false);
+
+      refresh();
+
+    });
+
+  }
+
+
+
+  function saveMemberLinkInfo() {
+    if (document.getElementById('memberLinkSave').dataset.linked === '1') {
+      notify('Thông tin đã được liên kết. Nếu muốn cập nhật, vui lòng liên hệ Admin.', true);
       return;
     }
 
-    callServer('submitTransaction',
-      [tg.initData, type, amount, method, details],
-      result => {
-        notify(result.message || 'Đã gửi yêu cầu.', false);
-        event.target.reset();
-        showTab('history');
-        refresh();
-      }
-    );
-  }
-
-  function saveProfile() {
-    const name = document.getElementById('profileName').value;
-    const bio = document.getElementById('profileBio').value;
-    callServer('saveMyProfile', [tg.initData, name, bio], () => {
-      notify('Đã lưu hồ sơ.', false);
-      refresh();
-    });
-  }
-
-  function saveMemberLinkInfo() {
     if (!tg || !tg.initData) { notify('Hãy mở ứng dụng trong Telegram.', true); return; }
+
     const args = [tg.initData,
+
       document.getElementById('memberPhone').value,
+
       document.getElementById('memberBankName').value,
+
       document.getElementById('memberBankAccount').value,
+
       document.getElementById('memberBankHolder').value
+
     ];
+
     callServer('saveMemberLink', args, result => {
+
+      document.getElementById('memberLinkSave').dataset.linked = '1';
+      document.getElementById('memberLinkSave').disabled = true;
       notify(result.message || 'Đã lưu thông tin liên kết.', false);
+
       refresh();
+
     });
+
   }
+
+
 
   function loadAdmin() {
+
     if (!tg || !tg.initData) return;
+
     callServer('getAdminData', [tg.initData], data => {
+
       const list = data.pending || [];
+
       const el = document.getElementById('adminList');
 
+
+
       if (!list.length) {
+
         el.innerHTML = '<p class="muted">Không có yêu cầu đang chờ duyệt.</p>';
+
         return;
+
       }
 
+
+
       el.innerHTML = list.map(tx =>
+
         '<div class="item">' +
+
         '<strong>' + escapeHtml(tx.type === 'deposit' ? 'Nạp tiền' : 'Rút tiền') +
+
         ' · ' + money(tx.amount) + '</strong>' +
+
         '<p class="muted small">Mã: ' + escapeHtml(tx.id) +
+
         '<br>Telegram ID: ' + escapeHtml(tx.telegram_id) +
+
         '<br>Phương thức: ' + escapeHtml(tx.method) +
+
         '<br>Thông tin: ' + escapeHtml(tx.details) +
+
         '<br>Thời gian: ' + escapeHtml(tx.created_at) + '</p>' +
+
         '<label>Ghi chú quản trị</label>' +
+
         '<input id="note-' + escapeHtml(tx.id) + '" maxlength="500" placeholder="Ghi chú (không bắt buộc)">' +
+
         '<div class="grid" style="margin-top:10px">' +
-        '<button class="primary" onclick="reviewTx(\'' +
-        escapeHtml(tx.id) + '\',\'approved\')">Duyệt</button>' +
-        '<button class="danger" onclick="reviewTx(\'' +
-        escapeHtml(tx.id) + '\',\'rejected\')">Từ chối</button>' +
+
+        '<button class="primary" onclick="reviewTx(&quot;' +
+        escapeHtml(tx.id) + '&quot;,&quot;approved&quot;)">Duyệt</button>' +
+        '<button class="danger" onclick="reviewTx(&quot;' +
+        escapeHtml(tx.id) + '&quot;,&quot;rejected&quot;)">Từ chối</button>' +
         '</div></div>'
+
       ).join('');
+
     });
+
   }
 
+
+
   function reviewTx(id, decision) {
+
     const noteEl = document.getElementById('note-' + id);
+
     const note = noteEl ? noteEl.value : '';
+
     const confirmText = decision === 'approved'
+
       ? 'Bạn xác nhận duyệt giao dịch này?'
+
       : 'Bạn xác nhận từ chối giao dịch này?';
+
+
 
     if (!window.confirm(confirmText)) return;
 
+
+
     callServer('reviewTransaction',
+
       [tg.initData, id, decision, note],
+
       result => {
+
         notify(result.message || 'Đã cập nhật.', false);
+
         loadAdmin();
+
         refresh();
+
       }
+
     );
+
   }
+
+
+
+
 
 
 
   // Khởi chạy ứng dụng sau khi các hàm đã được khai báo.
+
   try { refresh(); }
+
   catch (error) {
+
     document.getElementById('loading').textContent = error.message;
+
     document.getElementById('retry').style.display = 'block';
+
   }
+
 </script>
+
 </body>
+
 </html>
