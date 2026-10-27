@@ -142,19 +142,21 @@
       <div class="card">
         <h2>Yêu cầu nạp tiền</h2>
         <p class="muted">Gửi thông tin nạp tiền. Số dư chỉ thay đổi sau khi quản trị viên duyệt.</p>
+        <div id="bankInfo" class="card" style="background:#f7f9ff;margin:12px 0">
+          <strong>Thông tin nhận chuyển khoản</strong>
+          <p class="muted">Đang tải thông tin ngân hàng...</p>
+        </div>
         <form onsubmit="submitTx(event, 'deposit')">
-          <label>Số tiền</label>
+          <label>Số tiền đã chuyển</label>
           <input id="depositAmount" type="number" min="1" step="any" required placeholder="Nhập số tiền">
           <label>Phương thức nạp</label>
           <select id="depositMethod" required>
-            <option value="">Chọn phương thức</option>
-            <option>Chuyển khoản ngân hàng</option>
-            <option>Ví điện tử</option>
-            <option>Phương thức khác</option>
+            <option value="Chuyển khoản ngân hàng">Chuyển khoản ngân hàng</option>
           </select>
-          <label>Mã giao dịch / nội dung</label>
-          <textarea id="depositDetails" maxlength="500" placeholder="Nhập mã giao dịch hoặc ghi chú"></textarea>
-          <button class="primary full" type="submit">Gửi yêu cầu nạp</button>
+          <label>Mã giao dịch / nội dung chuyển khoản</label>
+          <textarea id="depositDetails" maxlength="500" required placeholder="Nhập mã giao dịch hoặc nội dung đã chuyển"></textarea>
+          <p class="muted small">Chỉ gửi yêu cầu sau khi đã chuyển khoản. Admin kiểm tra tiền thực nhận trước khi duyệt.</p>
+          <button class="primary full" type="submit" id="depositSubmit" disabled>Gửi yêu cầu nạp</button>
         </form>
       </div>
     </section>
@@ -253,6 +255,10 @@
   function setBusy(value) {
     busy = value;
     document.querySelectorAll('button').forEach(b => b.disabled = value);
+    if (!value) {
+      const depositButton = document.getElementById('depositSubmit');
+      if (depositButton && depositButton.dataset.configured !== '1') depositButton.disabled = true;
+    }
   }
 
   
@@ -368,8 +374,30 @@ function callServer(method, args, onSuccess, onFailure) {
     }).join('');
   }
 
+  function renderBankInfo(bank) {
+    const el = document.getElementById('bankInfo');
+    const submit = document.getElementById('depositSubmit');
+    if (!bank || !bank.bank_name || !bank.account_name || !bank.account_number) {
+      el.innerHTML = '<strong>Thông tin nhận chuyển khoản</strong><p class="muted">Chưa cấu hình tài khoản ngân hàng. Vui lòng liên hệ quản trị viên.</p>';
+      submit.dataset.configured = '0';
+      submit.disabled = true;
+      return;
+    }
+    const qr = /^https:\/\//i.test(String(bank.qr_image_url || ''))
+      ? '<img src="' + escapeHtml(bank.qr_image_url) + '" alt="Mã QR chuyển khoản" style="display:block;width:220px;max-width:100%;margin:12px auto;border-radius:10px">'
+      : '<p class="muted">Chưa có ảnh QR. Có thể chuyển khoản bằng số tài khoản bên dưới.</p>';
+    el.innerHTML = '<strong>Thông tin nhận chuyển khoản</strong>' + qr +
+      '<p>Ngân hàng: <strong>' + escapeHtml(bank.bank_name) + '</strong></p>' +
+      '<p>Chủ tài khoản: <strong>' + escapeHtml(bank.account_name) + '</strong></p>' +
+      '<p>Số tài khoản: <strong>' + escapeHtml(bank.account_number) + '</strong></p>' +
+      '<p>Nội dung chuyển khoản: <strong>' + escapeHtml(bank.transfer_content || '') + '</strong></p>';
+    submit.dataset.configured = '1';
+    submit.disabled = false;
+  }
+
   function renderDashboard(data) {
     dashboard = data;
+    renderBankInfo(data.bank_account);
     document.getElementById('loading').style.display = 'none';
     document.getElementById('retry').style.display = 'none';
     document.getElementById('app').style.display = 'block';
@@ -432,6 +460,10 @@ function refresh() {
   function submitTx(event, type) {
     event.preventDefault();
     if (busy) return;
+    if (type === 'deposit' && document.getElementById('depositSubmit').dataset.configured !== '1') {
+      notify('Chưa cấu hình tài khoản nhận tiền.', true);
+      return;
+    }
 
     const prefix = type === 'deposit' ? 'deposit' : 'withdraw';
     const amount = document.getElementById(prefix + 'Amount').value;
