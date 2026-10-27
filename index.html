@@ -1,536 +1,487 @@
+const SHEETS = {
+  USERS: 'Users',
+  LOGS: 'ActivityLog',
+  TX: 'Transactions',
+  GAMES: 'Games',
+  ADMINS: 'Admins'
+};
 
-<!DOCTYPE html>
-<html lang="vi">
-<head>
-  <base target="_top">
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-  <script src="https://telegram.org/js/telegram-web-app.js"></script>
-  <style>
-    :root {
-      --bg:#f4f6fb; --card:#fff; --text:#172033;
-      --muted:#718096; --blue:#315ee8; --red:#d43d4d;
-    }
-    * { box-sizing:border-box }
-    body { margin:0; background:var(--bg); color:var(--text); font:14px Arial,sans-serif }
-    main { max-width:700px; margin:auto; padding:14px 12px 50px }
-    h1 { font-size:23px; margin:8px 0 }
-    h2 { font-size:17px; margin:0 0 12px }
-    .card { background:var(--card); padding:17px; border-radius:15px; margin:12px 0; border:1px solid #e5e9f2 }
-    .muted { color:var(--muted); line-height:1.5 }
-    .balance { background:#183b83; color:white; padding:22px; border-radius:17px; margin:14px 0 }
-    .balance strong { display:block; font-size:29px; margin:12px 0 }
-    .tabs { display:flex; gap:7px; overflow-x:auto; padding:8px 0 }
-    button { border:0; border-radius:10px; padding:11px 13px; cursor:pointer; font-weight:700 }
-    button:disabled { opacity:.5 }
-    .tabs button { flex-shrink:0; background:#e5eafa }
-    .tabs button.active, .primary { background:var(--blue); color:white }
-    .danger { background:#ffe4e8; color:#b32636 }
-    .secondary { background:#e9efff; color:#2546a9 }
-    .full { width:100%; margin-top:12px }
-    .section { display:none }
-    .section.active { display:block }
-    label { display:block; margin:12px 0 6px; font-weight:700 }
-    input,select,textarea { width:100%; border:1px solid #d7ddeb; border-radius:9px; padding:12px; font:inherit; background:white }
-    textarea { min-height:75px }
-    .item { padding:13px 0; border-bottom:1px solid #e5e9f2 }
-    .row { display:flex; justify-content:space-between; align-items:center; gap:10px }
-    .grid { display:grid; grid-template-columns:1fr 1fr; gap:10px }
-    .pill { font-size:12px; padding:5px 8px; border-radius:20px; background:#eee }
-    .approved { background:#dcf5e7; color:#14734b }
-    .pending { background:#fff0cf; color:#875900 }
-    .rejected { background:#ffe4e8; color:#a52a39 }
-    .notice { padding:13px; border-radius:10px; margin:12px 0; display:none; white-space:pre-wrap }
-    .notice.error { display:block; background:#ffe7e9; color:#a52a39 }
-    .notice.ok { display:block; background:#def5e8; color:#126b47 }
-    a { color:var(--blue) }
-    @media(max-width:420px) { .grid { grid-template-columns:1fr } }
-  </style>
-</head>
-<body>
-<main>
-  <h1>🚀 Telegram Mini App</h1>
-  <div class="muted">Hệ thống tài khoản và giao dịch</div>
+const HEADERS = {
+  Users: [
+    'telegram_id', 'username', 'first_name', 'last_name',
+    'display_name', 'bio', 'status', 'created_at', 'updated_at'
+  ],
+  ActivityLog: ['timestamp', 'telegram_id', 'action', 'details'],
+  Transactions: [
+    'transaction_id', 'telegram_id', 'type', 'amount',
+    'method', 'details', 'status', 'created_at',
+    'reviewed_at', 'reviewed_by', 'note'
+  ],
+  Games: [
+    'game_id', 'name', 'description', 'url',
+    'image_url', 'status', 'sort_order'
+  ],
+  Admins: ['telegram_id', 'username', 'role', 'status']
+};
 
-  <div id="notice" class="notice"></div>
+/**
+ * Chạy một lần để tạo/kiểm tra 5 sheet và hàng tiêu đề.
+ * Không xóa dữ liệu đang có.
+ */
+function setupDatabase() {
+  const id = PropertiesService.getScriptProperties()
+    .getProperty('SPREADSHEET_ID');
+  if (!id) throw new Error('Thiếu SPREADSHEET_ID trong Script Properties.');
 
-  <div id="loading" class="card">
-    <strong id="loadingText">Đang kết nối Telegram...</strong>
-    <p class="muted" id="loadingDetail">Vui lòng chờ.</p>
-    <button id="retryBtn" class="secondary full" style="display:none" onclick="startApp()">Thử kết nối lại</button>
-  </div>
+  const ss = SpreadsheetApp.openById(id);
 
-  <div id="app" style="display:none">
-    <div class="card">
-      <div class="muted">Xin chào</div>
-      <h2 id="displayName">...</h2>
-      <div id="username" class="muted"></div>
-    </div>
+  Object.keys(HEADERS).forEach(name => {
+    let sh = ss.getSheetByName(name);
+    if (!sh) sh = ss.insertSheet(name);
 
-    <div class="balance">
-      SỐ DƯ HIỆN TẠI
-      <strong id="balance">0</strong>
-      <div>Số dư khả dụng: <b id="available">0</b></div>
-    </div>
-
-    <div class="tabs" id="tabs">
-      <button data-tab="home" class="active">Tổng quan</button>
-      <button data-tab="deposit">Nạp tiền</button>
-      <button data-tab="withdraw">Rút tiền</button>
-      <button data-tab="history">Lịch sử</button>
-      <button data-tab="games">Trò chơi</button>
-      <button data-tab="profile">Hồ sơ</button>
-      <button data-tab="admin" id="adminTab" style="display:none">Quản trị</button>
-    </div>
-
-    <section id="home" class="section active">
-      <div class="card">
-        <h2>Thao tác nhanh</h2>
-        <div class="grid">
-          <button class="primary" onclick="showTab('deposit')">＋ Nạp tiền</button>
-          <button class="secondary" onclick="showTab('withdraw')">↗ Rút tiền</button>
-        </div>
-      </div>
-      <div class="card">
-        <h2>Giao dịch gần đây</h2>
-        <div id="recentHistory"></div>
-      </div>
-    </section>
-
-    <section id="deposit" class="section">
-      <div class="card">
-        <h2>Gửi yêu cầu nạp</h2>
-        <form onsubmit="submitTx(event,'deposit')">
-          <label>Số tiền</label>
-          <input id="depositAmount" type="number" min="1" max="1000000000" step="0.01" required>
-          <label>Phương thức</label>
-          <select id="depositMethod" required>
-            <option value="">Chọn phương thức</option>
-            <option>Chuyển khoản ngân hàng</option>
-            <option>Ví điện tử</option>
-            <option>Phương thức khác</option>
-          </select>
-          <label>Mã giao dịch / ghi chú</label>
-          <textarea id="depositDetails" maxlength="500"></textarea>
-          <button class="primary full" type="submit">Gửi yêu cầu nạp</button>
-        </form>
-      </div>
-    </section>
-
-    <section id="withdraw" class="section">
-      <div class="card">
-        <h2>Gửi yêu cầu rút</h2>
-        <p class="muted">Các yêu cầu rút đang chờ sẽ được giữ chỗ trong số dư khả dụng.</p>
-        <form onsubmit="submitTx(event,'withdraw')">
-          <label>Số tiền</label>
-          <input id="withdrawAmount" type="number" min="1" max="1000000000" step="0.01" required>
-          <label>Phương thức</label>
-          <select id="withdrawMethod" required>
-            <option value="">Chọn phương thức</option>
-            <option>Chuyển khoản ngân hàng</option>
-            <option>Ví điện tử</option>
-            <option>Phương thức khác</option>
-          </select>
-          <label>Thông tin nhận tiền</label>
-          <textarea id="withdrawDetails" maxlength="500" required></textarea>
-          <button class="primary full" type="submit">Gửi yêu cầu rút</button>
-        </form>
-      </div>
-    </section>
-
-    <section id="history" class="section">
-      <div class="card">
-        <h2>Lịch sử giao dịch</h2>
-        <div id="allHistory"></div>
-      </div>
-    </section>
-
-    <section id="games" class="section">
-      <div class="card">
-        <h2>Danh sách trò chơi</h2>
-        <div id="gamesList"></div>
-      </div>
-    </section>
-
-    <section id="profile" class="section">
-      <div class="card">
-        <h2>Hồ sơ của tôi</h2>
-        <label>Tên hiển thị</label>
-        <input id="profileName" maxlength="60">
-        <label>Giới thiệu</label>
-        <textarea id="profileBio" maxlength="250"></textarea>
-        <button class="primary full" onclick="saveProfile()">Lưu hồ sơ</button>
-      </div>
-    </section>
-
-    <section id="admin" class="section">
-      <div class="card">
-        <h2>Quản trị giao dịch</h2>
-        <button class="secondary full" onclick="loadAdmin()">Tải danh sách chờ duyệt</button>
-        <div id="adminList"></div>
-      </div>
-    </section>
-  </div>
-</main>
-
-<script>
-'use strict';
-
-const tg = window.Telegram && window.Telegram.WebApp;
-let initData = '';
-let dashboard = null;
-let busy = false;
-let currentTab = 'home';
-
-const $ = id => document.getElementById(id);
-
-function escapeHtml(v) {
-  return String(v == null ? '' : v).replace(/[&<>"']/g, c => ({
-    '&':'&amp;', '<':'&lt;', '>':'&gt;',
-    '"':'&quot;', "'":'&#39;'
-  }[c]));
-}
-
-function money(v) {
-  const n = Number(v);
-  return Number.isFinite(n)
-    ? n.toLocaleString('vi-VN',{maximumFractionDigits:2})
-    : '0';
-}
-
-function safeUrl(v) {
-  try {
-    const u = new URL(String(v));
-    return ['https:','http:'].includes(u.protocol) ? u.href : '';
-  } catch(e) {
-    return '';
-  }
-}
-
-function message(text, error=false) {
-  $('notice').textContent = text;
-  $('notice').className = 'notice ' + (error ? 'error' : 'ok');
-  window.scrollTo({top:0,behavior:'smooth'});
-}
-
-function setBusy(value) {
-  busy = value;
-  document.querySelectorAll('button').forEach(b => b.disabled = value);
-}
-
-function callServer(name, args=[]) {
-  return new Promise((resolve,reject) => {
-    if (!window.google || !google.script || !google.script.run) {
-      reject(new Error(
-        'Không có google.script.run. Hãy mở Web App đã triển khai bằng Apps Script.'
-      ));
+    const headers = HEADERS[name];
+    if (sh.getLastRow() === 0) {
+      sh.getRange(1, 1, 1, headers.length).setValues([headers]);
+      sh.setFrozenRows(1);
       return;
     }
 
-    try {
-      google.script.run
-        .withSuccessHandler(resolve)
-        .withFailureHandler(err => reject(new Error(
-          err && err.message ? err.message : String(err)
-        )))[name](...args);
-    } catch(e) {
-      reject(e);
+    const existing = sh.getRange(1, 1, 1, headers.length)
+      .getDisplayValues()[0];
+    if (headers.some((h, i) => existing[i] !== h)) {
+      throw new Error(
+        'Sai tiêu đề cột tại sheet "' + name +
+        '". Hãy đối chiếu với HEADERS trong Code.gs.'
+      );
     }
+    sh.setFrozenRows(1);
   });
+
+  return 'Đã kiểm tra đủ 5 sheet.';
 }
 
-function showTab(tab) {
-  if (!$ (tab)) return;
-  if (tab === 'admin' && !(dashboard && dashboard.isAdmin)) return;
-
-  currentTab = tab;
-
-  document.querySelectorAll('.section').forEach(el => {
-    el.classList.toggle('active',el.id === tab);
-  });
-
-  document.querySelectorAll('#tabs button').forEach(el => {
-    el.classList.toggle('active',el.dataset.tab === tab);
-  });
-
-  if (tab === 'admin') loadAdmin();
+/** Giao diện Mini App. */
+function doGet(e) {
+  if (!e || !e.parameter || e.parameter.bridge !== '1') {
+    return HtmlService.createHtmlOutput('Trang API. Hãy mở Mini App từ Telegram Bot.');
+  }
+  const origin = PropertiesService.getScriptProperties().getProperty('GITHUB_ORIGIN');
+  if (!origin || !/^https:\/\/[a-z0-9.-]+$/i.test(origin)) {
+    throw new Error('Thiếu GITHUB_ORIGIN, ví dụ https://tenban.github.io');
+  }
+  const template = HtmlService.createTemplateFromFile('Bridge');
+  template.allowedOrigin = origin;
+  return template.evaluate().setTitle('Mini App Bridge')
+    .setXFrameOptionsMode(HtmlService.XFrameOptionsMode.ALLOWALL);
 }
 
-document.querySelectorAll('#tabs button').forEach(btn => {
-  btn.addEventListener('click',() => showTab(btn.dataset.tab));
-});
+function getSS_() {
+  const id = PropertiesService.getScriptProperties()
+    .getProperty('SPREADSHEET_ID');
+  if (!id) throw new Error('Thiếu SPREADSHEET_ID trong Script Properties.');
+  return SpreadsheetApp.openById(id);
+}
 
-function pill(status) {
-  const labels = {
-    pending:'Chờ duyệt',
-    approved:'Đã duyệt',
-    rejected:'Từ chối'
+function sheet_(name) {
+  const sh = getSS_().getSheetByName(name);
+  if (!sh) throw new Error('Không tìm thấy sheet "' + name + '".');
+  return sh;
+}
+
+function rowById_(sh, id) {
+  if (sh.getLastRow() < 2) return 0;
+  const cell = sh.getRange(2, 1, sh.getLastRow() - 1, 1)
+    .createTextFinder(String(id))
+    .matchEntireCell(true)
+    .findNext();
+  return cell ? cell.getRow() : 0;
+}
+
+function log_(telegramId, action, details) {
+  sheet_(SHEETS.LOGS).appendRow([
+    new Date().toISOString(), String(telegramId), safeCell_(action), safeCell_(details)
+  ]);
+}
+
+/**
+ * Kiểm tra chữ ký Telegram Web App initData.
+ * Không nhận Telegram ID do trình duyệt tự gửi để xác thực người dùng.
+ */
+function verifyTelegramInitData_(initData) {
+  if (typeof initData !== 'string' || !initData || initData.length > 10000) {
+    throw new Error('Không có dữ liệu xác thực Telegram. Hãy đóng và mở lại Mini App.');
+  }
+
+  const token = PropertiesService.getScriptProperties()
+    .getProperty('BOT_TOKEN');
+  if (!token) throw new Error('Thiếu BOT_TOKEN trong Script Properties.');
+
+  const params = {};
+  initData.split('&').forEach(part => {
+    const i = part.indexOf('=');
+    if (i < 0) return;
+    const k = decodeURIComponent(part.slice(0, i).replace(/\+/g, ' '));
+    const v = decodeURIComponent(part.slice(i + 1).replace(/\+/g, ' '));
+    if (Object.prototype.hasOwnProperty.call(params, k)) {
+      throw new Error('Dữ liệu xác thực Telegram không hợp lệ.');
+    }
+    params[k] = v;
+  });
+
+  const receivedHash = params.hash;
+  if (!receivedHash || !/^[a-f0-9]{64}$/i.test(receivedHash)) {
+    throw new Error('Thiếu chữ ký Telegram.');
+  }
+
+  const checkString = Object.keys(params)
+    .filter(k => k !== 'hash')
+    .sort()
+    .map(k => k + '=' + params[k])
+    .join('\n');
+
+  // Telegram Web App: secret_key = HMAC_SHA256(key="WebAppData", message=bot_token)
+  const secretKey = Utilities.computeHmacSha256Signature(token, 'WebAppData');
+  const calculatedHash = Utilities.computeHmacSha256Signature(
+    checkString, secretKey
+  ).map(b => ('0' + ((b + 256) % 256).toString(16)).slice(-2)).join('');
+
+  if (calculatedHash.toLowerCase() !== receivedHash.toLowerCase()) {
+    throw new Error('Xác thực Telegram thất bại. Kiểm tra BOT_TOKEN đang cấu hình.');
+  }
+
+  const authDate = Number(params.auth_date);
+  const now = Math.floor(Date.now() / 1000);
+  if (!Number.isFinite(authDate) || authDate > now + 30 || now - authDate > 3600) {
+    throw new Error('Phiên Telegram đã hết hạn. Hãy đóng và mở lại Mini App.');
+  }
+
+  let user;
+  try {
+    user = JSON.parse(params.user || '');
+  } catch (e) {
+    throw new Error('Không đọc được tài khoản Telegram.');
+  }
+
+  if (!user || !Number.isSafeInteger(user.id) || user.id <= 0) {
+    throw new Error('Telegram ID không hợp lệ.');
+  }
+  return user;
+}
+
+function getUser_(initData) {
+  const tg = verifyTelegramInitData_(initData);
+  const lock = LockService.getScriptLock();
+  lock.waitLock(15000);
+  try {
+  const sh = sheet_(SHEETS.USERS);
+  const id = String(tg.id);
+  let row = rowById_(sh, id);
+  const now = new Date().toISOString();
+
+  if (!row) {
+    const profile = {
+      telegram_id: id,
+      username: safeCell_(tg.username || ''),
+      first_name: safeCell_(tg.first_name || ''),
+      last_name: safeCell_(tg.last_name || ''),
+      display_name: safeCell_([tg.first_name, tg.last_name].filter(Boolean).join(' ')),
+      bio: '',
+      status: 'active',
+      created_at: now,
+      updated_at: now
+    };
+    sh.appendRow(HEADERS.Users.map(h => profile[h] || ''));
+    log_(id, 'register', 'Tạo hồ sơ mới');
+    row = sh.getLastRow();
+  } else {
+    const vals = sh.getRange(row, 1, 1, HEADERS.Users.length)
+      .getDisplayValues()[0];
+    const p = {};
+    HEADERS.Users.forEach((h, i) => p[h] = vals[i]);
+    if (p.status !== 'active') throw new Error('Tài khoản không hoạt động.');
+
+    p.username = safeCell_(tg.username || '');
+    p.first_name = safeCell_(tg.first_name || '');
+    p.last_name = safeCell_(tg.last_name || '');
+    p.updated_at = now;
+    sh.getRange(row, 1, 1, HEADERS.Users.length)
+      .setValues([HEADERS.Users.map(h => p[h] || '')]);
+  }
+
+  const vals = sh.getRange(row, 1, 1, HEADERS.Users.length).getDisplayValues()[0];
+  const profile = {};
+  HEADERS.Users.forEach((h, i) => profile[h] = vals[i]);
+  if (profile.status !== 'active') throw new Error('Tài khoản không hoạt động.');
+
+  return { tg: tg, profile: profile };
+  } finally { lock.releaseLock(); }
+}
+
+// Đọc số tiền từ ô số hoặc chuỗi có phân cách hàng nghìn.
+function parseAmount_(value) {
+  if (typeof value === 'number') return value;
+  const raw = String(value == null ? '' : value).trim();
+  if (!raw) return NaN;
+  if (/^\d+(?:[.,]\d{3})+$/.test(raw)) return Number(raw.replace(/[.,]/g, ''));
+  if (/^\d+(?:[.,]\d{3})+[.,]\d{1,2}$/.test(raw)) {
+    const last = Math.max(raw.lastIndexOf(','), raw.lastIndexOf('.'));
+    return Number(raw.slice(0, last).replace(/[.,]/g, '') + '.' + raw.slice(last + 1));
+  }
+  return Number(raw.replace(',', '.'));
+}
+
+function transactionRows_() {
+  const sh = sheet_(SHEETS.TX);
+  return sh.getLastRow() < 2 ? [] :
+    sh.getRange(2, 1, sh.getLastRow() - 1, HEADERS.Transactions.length).getValues();
+}
+
+function availableBalance_(telegramId) {
+  let balance = 0;
+  transactionRows_().forEach(r => {
+    if (String(r[1]) !== String(telegramId)) return;
+    const amount = parseAmount_(r[3]);
+    if (!Number.isFinite(amount) || amount <= 0) return;
+    if (r[2] === 'deposit' && r[6] === 'approved') balance += amount;
+    if (r[2] === 'withdraw' && (r[6] === 'approved' || r[6] === 'pending')) balance -= amount;
+  });
+  return Math.round(balance * 100) / 100;
+}
+
+function safeCell_(value) {
+  const s = String(value == null ? '' : value);
+  return /^[=+\-@\t\r]/.test(s) ? "'" + s : s;
+}
+
+function balanceFor_(telegramId) {
+  let balance = 0;
+  transactionRows_().forEach(r => {
+    if (String(r[1]) !== String(telegramId) || r[6] !== 'approved') return;
+    const amount = parseAmount_(r[3]);
+    if (!Number.isFinite(amount) || amount <= 0) return;
+    if (r[2] === 'deposit') balance += amount;
+    if (r[2] === 'withdraw') balance -= amount;
+  });
+  return Math.round(balance * 100) / 100;
+}
+
+function getDashboard(initData) {
+  const result = getUser_(initData);
+  const tg = result.tg;
+  const profile = result.profile;
+  const sh = sheet_(SHEETS.TX);
+  const history = [];
+
+  if (sh.getLastRow() >= 2) {
+    const rows = sh.getRange(2, 1, sh.getLastRow() - 1,
+      HEADERS.Transactions.length).getValues();
+
+    rows.forEach(r => {
+      if (String(r[1]) !== String(tg.id)) return;
+      history.push({
+        id: r[0],
+        type: r[2],
+        amount: parseAmount_(r[3]),
+        method: r[4],
+        details: r[5],
+        status: r[6],
+        created_at: r[7] instanceof Date ? r[7].toISOString() : String(r[7]),
+        note: r[10]
+      });
+    });
+  }
+
+  history.sort((a, b) => String(b.created_at).localeCompare(String(a.created_at)));
+
+  return {
+    profile: profile,
+    balance: balanceFor_(tg.id),
+    available_balance: availableBalance_(tg.id),
+    isAdmin: isAdmin_(tg.id),
+    history: history.slice(0, 50),
+    games: getGames_()
   };
-  const key = ['pending','approved','rejected'].includes(status)
-    ? status : '';
-  return '<span class="pill ' + key + '">' +
-    escapeHtml(labels[status] || status) + '</span>';
 }
 
-function historyHtml(items) {
-  if (!items || !items.length) {
-    return '<p class="muted">Chưa có giao dịch.</p>';
-  }
+function getGames_() {
+  const sh = sheet_(SHEETS.GAMES);
+  if (sh.getLastRow() < 2) return [];
 
-  return items.map(t => {
-    const deposit = t.type === 'deposit';
-    return '<div class="item">' +
-      '<div class="row"><b>' + (deposit?'Nạp tiền':'Rút tiền') +
-      '</b>' + pill(t.status) + '</div>' +
-      '<h2 style="margin:8px 0">' +
-      (deposit?'+':'−') + money(t.amount) + '</h2>' +
-      '<div class="muted">' + escapeHtml(t.created_at) + '</div>' +
-      '<div class="muted">' + escapeHtml(t.method) + '</div>' +
-      (t.note ? '<div>Ghi chú: ' + escapeHtml(t.note) + '</div>' : '') +
-      '</div>';
-  }).join('');
+  return sh.getRange(2, 1, sh.getLastRow() - 1, HEADERS.Games.length)
+    .getDisplayValues()
+    .filter(r => r[5].toLowerCase() === 'active' && r[0] && r[1] && r[3])
+    .map(r => ({
+      id: r[0],
+      name: r[1],
+      description: r[2],
+      url: r[3],
+      image_url: r[4],
+      sort_order: Number(r[6]) || 0
+    }))
+    .sort((a, b) => a.sort_order - b.sort_order);
 }
 
-function gamesHtml(items) {
-  if (!items || !items.length) {
-    return '<p class="muted">Chưa có trò chơi đang hoạt động.</p>';
+function submitTransaction(initData, type, amount, method, details) {
+  const result = getUser_(initData);
+  const tg = result.tg;
+  type = String(type || '');
+  amount = Number(amount);
+  method = String(method || '').trim().slice(0, 100);
+  details = String(details || '').trim().slice(0, 500);
+
+  if (!['deposit', 'withdraw'].includes(type)) {
+    throw new Error('Loại giao dịch không hợp lệ.');
+  }
+  if (!Number.isFinite(amount) || amount <= 0 || amount > 1000000000 || Math.abs(Math.round(amount * 100) - amount * 100) > 0.000001) {
+    throw new Error('Số tiền phải lớn hơn 0 và không vượt quá 1 tỷ.');
+  }
+  if (!method) throw new Error('Hãy nhập phương thức giao dịch.');
+  if (type === 'withdraw' && !details) {
+    throw new Error('Hãy nhập thông tin nhận tiền.');
   }
 
-  return items.map(g => {
-    const url = safeUrl(g.url);
-    const img = safeUrl(g.image_url);
-    return '<div class="item">' +
-      (img ? '<img src="' + escapeHtml(img) +
-        '" style="width:65px;height:65px;object-fit:cover;border-radius:9px">' : '') +
-      '<h2>' + escapeHtml(g.name) + '</h2>' +
-      '<p class="muted">' + escapeHtml(g.description) + '</p>' +
-      (url ? '<a href="' + escapeHtml(url) +
-        '" target="_blank" rel="noopener noreferrer">Mở trò chơi</a>' : '') +
-      '</div>';
-  }).join('');
-}
-
-function render(data, preserveInputs=false) {
-  if (!data || !data.profile) {
-    throw new Error('Máy chủ không trả về dữ liệu tài khoản hợp lệ.');
-  }
-
-  dashboard = data;
-  const p = data.profile;
-
-  $('displayName').textContent = p.display_name || p.first_name || 'Thành viên';
-  $('username').textContent = p.username
-    ? '@' + p.username
-    : 'Telegram ID: ' + p.telegram_id;
-
-  $('balance').textContent = money(data.balance);
-  $('available').textContent = money(
-    data.available_balance == null ? data.balance : data.available_balance
-  );
-
-  $('recentHistory').innerHTML = historyHtml((data.history || []).slice(0,3));
-  $('allHistory').innerHTML = historyHtml(data.history || []);
-  $('gamesList').innerHTML = gamesHtml(data.games || []);
-
-  if (!preserveInputs) {
-    $('profileName').value = p.display_name || '';
-    $('profileBio').value = p.bio || '';
-  }
-
-  $('adminTab').style.display = data.isAdmin === true ? '' : 'none';
-
-  if (currentTab === 'admin' && !data.isAdmin) showTab('home');
-
-  $('loading').style.display = 'none';
-  $('app').style.display = 'block';
-}
-
-function loadingError(title, detail) {
-  $('loading').style.display = 'block';
-  $('loadingText').textContent = title;
-  $('loadingDetail').textContent = detail;
-  $('retryBtn').style.display = 'block';
-}
-
-async function startApp() {
-  $('retryBtn').style.display = 'none';
-  $('loadingText').textContent = 'Đang kết nối Telegram...';
-  $('loadingDetail').textContent = 'Đang kiểm tra phiên đăng nhập.';
-
-  if (!tg) {
-    loadingError(
-      'Không tìm thấy Telegram Web App',
-      'Không tải được Telegram SDK. Hãy mở Mini App từ bot.'
-    );
-    return;
-  }
-
+  const lock = LockService.getScriptLock();
+  lock.waitLock(10000);
   try {
-    tg.ready();
-    tg.expand();
-  } catch(e) {
-    console.warn('Telegram SDK:',e);
-  }
-
-  initData = tg.initData || '';
-
-  if (!initData) {
-    loadingError(
-      'Telegram chưa cung cấp initData',
-      'Mini App không nhận được dữ liệu xác thực. ' +
-      'Hãy kiểm tra URL Menu Button trong BotFather và cách Apps Script nhúng trang.'
-    );
-    return;
-  }
-
-  $('loadingText').textContent = 'Đang tải dữ liệu tài khoản...';
-
-  try {
-    const data = await callServer('getDashboard',[initData]);
-    render(data);
-  } catch(e) {
-    loadingError('Không thể tải tài khoản',e.message);
-    console.error('getDashboard:',e);
-  }
-}
-
-async function refreshData() {
-  const data = await callServer('getDashboard',[initData]);
-  render(data,true);
-}
-
-async function submitTx(event,type) {
-  event.preventDefault();
-  if (busy) return;
-
-  const prefix = type === 'deposit' ? 'deposit' : 'withdraw';
-  const amount = Number($(prefix+'Amount').value);
-  const method = $(prefix+'Method').value.trim();
-  const details = $(prefix+'Details').value.trim();
-
-  if (!Number.isFinite(amount) || amount <= 0 ||
-      amount > 1000000000 ||
-      Math.abs(amount*100-Math.round(amount*100)) > 0.000001) {
-    message('Số tiền không hợp lệ.',true);
-    return;
-  }
-
-  if (!method || (type === 'withdraw' && !details)) {
-    message('Vui lòng nhập đủ thông tin giao dịch.',true);
-    return;
-  }
-
-  setBusy(true);
-
-  try {
-    const result = await callServer('submitTransaction',
-      [initData,type,amount,method,details]);
-
-    event.target.reset();
-    await refreshData();
-    showTab('history');
-    message(result.message || 'Đã gửi yêu cầu.');
-  } catch(e) {
-    message(e.message,true);
-  } finally {
-    setBusy(false);
-  }
-}
-
-async function saveProfile() {
-  if (busy) return;
-  setBusy(true);
-
-  try {
-    const name = $('profileName').value.trim();
-    const bio = $('profileBio').value.trim();
-
-    const result = await callServer('saveMyProfile',
-      [initData,name,bio]);
-
-    await refreshData();
-    message(result.message || 'Đã lưu hồ sơ.');
-  } catch(e) {
-    message(e.message,true);
-  } finally {
-    setBusy(false);
-  }
-}
-
-async function loadAdmin() {
-  if (busy || !dashboard || !dashboard.isAdmin) return;
-
-  $('adminList').textContent = 'Đang tải yêu cầu...';
-
-  try {
-    const data = await callServer('getAdminData',[initData]);
-    const items = data.pending || [];
-
-    if (!items.length) {
-      $('adminList').textContent = 'Không có giao dịch đang chờ.';
-      return;
+    if (type === 'withdraw' && amount > availableBalance_(tg.id)) {
+      throw new Error('Số dư hiện tại không đủ để gửi yêu cầu rút.');
     }
 
-    $('adminList').innerHTML = items.map(t => {
-      return '<div class="item">' +
-        '<b>' + (t.type === 'deposit' ? 'Nạp' : 'Rút') +
-        ' · ' + money(t.amount) + '</b>' +
-        '<p class="muted">Mã: ' + escapeHtml(t.id) +
-        '<br>ID: ' + escapeHtml(t.telegram_id) +
-        '<br>Phương thức: ' + escapeHtml(t.method) +
-        '<br>Thông tin: ' + escapeHtml(t.details) + '</p>' +
-        '<input maxlength="500" data-note="' + escapeHtml(t.id) +
-        '" placeholder="Ghi chú quản trị">' +
-        '<div class="grid" style="margin-top:10px">' +
-        '<button class="primary" data-review="approved" data-id="' +
-        escapeHtml(t.id) + '">Duyệt</button>' +
-        '<button class="danger" data-review="rejected" data-id="' +
-        escapeHtml(t.id) + '">Từ chối</button>' +
-        '</div></div>';
-    }).join('');
-
-  } catch(e) {
-    $('adminList').textContent = e.message;
-    message(e.message,true);
-  }
-}
-
-$('adminList').addEventListener('click',event => {
-  const btn = event.target.closest('button[data-review]');
-  if (!btn) return;
-  reviewTx(btn.dataset.id,btn.dataset.review);
-});
-
-async function reviewTx(id,decision) {
-  if (busy || !dashboard || !dashboard.isAdmin) return;
-
-  const noteInput = [...$('adminList').querySelectorAll('input[data-note]')]
-    .find(el => el.dataset.note === id);
-
-  const note = noteInput ? noteInput.value : '';
-
-  if (!confirm(decision === 'approved'
-    ? 'Xác nhận DUYỆT giao dịch?'
-    : 'Xác nhận TỪ CHỐI giao dịch?')) return;
-
-  setBusy(true);
-
-  try {
-    const result = await callServer('reviewTransaction',
-      [initData,id,decision,note]);
-
-    await refreshData();
-    message(result.message || 'Đã xử lý giao dịch.');
-  } catch(e) {
-    message(e.message,true);
+    const id = 'TX-' + Utilities.getUuid().replace(/-/g, '').slice(0, 12).toUpperCase();
+    sheet_(SHEETS.TX).appendRow([
+      id, String(tg.id), type, amount, safeCell_(method), safeCell_(details),
+      'pending', new Date().toISOString(), '', '', ''
+    ]);
+    log_(tg.id, 'transaction_request', type + ' ' + amount + ' ' + id);
+    return {
+      ok: true,
+      id: id,
+      message: 'Đã gửi yêu cầu. Vui lòng chờ quản trị viên duyệt.'
+    };
   } finally {
-    setBusy(false);
+    lock.releaseLock();
   }
-
-  if (dashboard && dashboard.isAdmin) loadAdmin();
 }
 
-startApp();
-</script>
-</body>
-</html>
+function isAdmin_(telegramId) {
+  const sh = sheet_(SHEETS.ADMINS);
+  if (sh.getLastRow() < 2) return false;
+
+  return sh.getRange(2, 1, sh.getLastRow() - 1, HEADERS.Admins.length)
+    .getDisplayValues()
+    .some(r => r[0] === String(telegramId) &&
+      r[2] === 'admin' && r[3] === 'active');
+}
+
+function getAdminData(initData) {
+  const result = getUser_(initData);
+  const tg = result.tg;
+  if (!isAdmin_(tg.id)) throw new Error('Bạn không có quyền quản trị.');
+
+  const sh = sheet_(SHEETS.TX);
+  const pending = [];
+  if (sh.getLastRow() >= 2) {
+    sh.getRange(2, 1, sh.getLastRow() - 1, HEADERS.Transactions.length)
+      .getValues().forEach(r => {
+        if (r[6] !== 'pending') return;
+        pending.push({
+          id: r[0],
+          telegram_id: String(r[1]),
+          type: r[2],
+          amount: parseAmount_(r[3]),
+          method: r[4],
+          details: r[5],
+          created_at: r[7] instanceof Date ? r[7].toISOString() : String(r[7])
+        });
+      });
+  }
+  return { pending: pending, isAdmin: true };
+}
+
+function reviewTransaction(initData, transactionId, decision, note) {
+  const result = getUser_(initData);
+  const tg = result.tg;
+  if (!isAdmin_(tg.id)) throw new Error('Bạn không có quyền quản trị.');
+
+  transactionId = String(transactionId || '');
+  decision = String(decision || '');
+  note = String(note || '').trim().slice(0, 500);
+  if (!['approved', 'rejected'].includes(decision)) {
+    throw new Error('Quyết định không hợp lệ.');
+  }
+
+  const lock = LockService.getScriptLock();
+  lock.waitLock(10000);
+  try {
+    const sh = sheet_(SHEETS.TX);
+    const row = rowById_(sh, transactionId);
+    if (!row) throw new Error('Không tìm thấy giao dịch.');
+
+    const r = sh.getRange(row, 1, 1, HEADERS.Transactions.length).getDisplayValues()[0];
+    if (r[6] !== 'pending') throw new Error('Giao dịch này đã được xử lý.');
+
+    if (decision === 'approved' && r[2] === 'withdraw' &&
+        availableBalance_(r[1]) < -0.001) {
+      throw new Error('Không đủ số dư để duyệt yêu cầu rút này.');
+    }
+
+    sh.getRange(row, 7).setValue(decision);
+    sh.getRange(row, 9).setValue(new Date().toISOString());
+    sh.getRange(row, 10).setValue(String(tg.id));
+    sh.getRange(row, 11).setValue(safeCell_(note));
+    log_(tg.id, 'transaction_review', transactionId + ' ' + decision);
+    return { ok: true, message: 'Đã cập nhật giao dịch.' };
+  } finally {
+    lock.releaseLock();
+  }
+}
+
+function saveMyProfile(initData, displayName, bio) {
+  const result = getUser_(initData);
+  const tg = result.tg;
+  displayName = String(displayName || '').trim();
+  bio = String(bio || '').trim();
+
+  if (!displayName || displayName.length > 60) {
+    throw new Error('Tên hiển thị phải có từ 1 đến 60 ký tự.');
+  }
+  if (bio.length > 250) throw new Error('Giới thiệu tối đa 250 ký tự.');
+
+  const sh = sheet_(SHEETS.USERS);
+  const row = rowById_(sh, String(tg.id));
+  if (!row) throw new Error('Không tìm thấy hồ sơ.');
+
+  const vals = sh.getRange(row, 1, 1, HEADERS.Users.length).getDisplayValues()[0];
+  const p = {};
+  HEADERS.Users.forEach((h, i) => p[h] = vals[i]);
+  if (p.status !== 'active') throw new Error('Tài khoản không hoạt động.');
+
+  p.display_name = safeCell_(displayName);
+  p.bio = safeCell_(bio);
+  p.updated_at = new Date().toISOString();
+  sh.getRange(row, 1, 1, HEADERS.Users.length)
+    .setValues([HEADERS.Users.map(h => p[h] || '')]);
+
+  log_(tg.id, 'profile_update', 'Cập nhật hồ sơ');
+  return { ok: true, message: 'Đã lưu hồ sơ.' };
+}
+
+/** Chạy thủ công trong Apps Script để kiểm tra cấu hình, không tiết lộ token. */
+function testSystem() {
+  const props = PropertiesService.getScriptProperties();
+  const token = props.getProperty('BOT_TOKEN');
+  const id = props.getProperty('SPREADSHEET_ID');
+  if (!token || !id) throw new Error('Thiếu BOT_TOKEN hoặc SPREADSHEET_ID.');
+  const ss = SpreadsheetApp.openById(id);
+  Object.keys(HEADERS).forEach(name => {
+    const sh = ss.getSheetByName(name);
+    if (!sh) throw new Error('Thiếu sheet: ' + name);
+    const actual = sh.getRange(1, 1, 1, HEADERS[name].length).getDisplayValues()[0];
+    if (actual.some((v, i) => v !== HEADERS[name][i])) throw new Error('Sai tiêu đề sheet: ' + name);
+  });
+  const response = UrlFetchApp.fetch('https://api.telegram.org/bot' + token + '/getMe', {muteHttpExceptions:true});
+  const result = JSON.parse(response.getContentText());
+  if (!result.ok) throw new Error('BOT_TOKEN không hợp lệ.');
+  console.log('OK: Sheets ' + ss.getName() + '; bot @' + result.result.username);
+  return 'OK';
+}
