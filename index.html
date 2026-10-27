@@ -518,7 +518,7 @@ function refresh() {
   }
   function sportsCreate(){const v=x=>document.getElementById(x).value;const date=new Date(v('spKickoff'));
     if(!Number.isFinite(date.getTime())){notify('Chọn giờ bắt đầu.',true);return;}
-    callServer('spAdminCreate',[tg.initData,v('spLeague'),v('spHome'),v('spAway'),date.toISOString(),v('spOH'),v('spOD'),v('spOA')],r=>{notify(r.message,false);loadSports();});
+    callServer('spAdminCreate',[tg.initData,v('spLeague'),v('spHome'),v('spAway'),date.toISOString(),v('spOH'),v('spOD'),v('spOA')],r=>{notify(r.message,false);loadSports();refresh();});
   }
   function sportsOdds(id){const s=prompt('Nhập 3 tỷ lệ: chủ nhà, hòa, khách (cách nhau dấu phẩy)');if(!s)return;const a=s.split(',').map(x=>Number(x.trim()));if(a.length!==3||a.some(x=>!Number.isFinite(x)||x<=1)){notify('Tỷ lệ không hợp lệ.',true);return;}
     callServer('spAdminOdds',[tg.initData,id,...a],r=>{notify(r.message,false);loadSports();});
