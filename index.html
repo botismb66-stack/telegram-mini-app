@@ -190,18 +190,13 @@
     </section>
 
     <section id="games" class="section">
-      <div class="card">
-        <h2>🎫 Cào thẻ may mắn</h2>
-        <p class="muted">1 lượt miễn phí mỗi ngày (GMT+7). Không trừ số dư. Thưởng tiền phải được Admin duyệt trước khi cộng vào tài khoản.</p>
-        <div id="scratchPanel" style="padding:18px;border-radius:16px;background:#182d60;color:white;text-align:center;margin:12px 0">
-          <div style="font-size:32px">🎁</div>
-          <div id="scratchResult" style="font-size:20px;font-weight:bold;margin:12px 0">Cào để khám phá phần thưởng</div>
-          <button class="primary" id="scratchButton" onclick="playScratch()">CÀO THẺ MIỄN PHÍ</button>
-        </div>
-        <h2>Danh sách trò chơi</h2>
-        <p class="muted">Game đang hoạt động sẽ hiển thị tại đây.</p>
-        <div id="gamesList"></div>
+      <div class="card"><h2>⚽ Dự đoán thể thao · DEMO</h2>
+        <p class="muted">Điểm thử nghiệm tách biệt hoàn toàn với số dư nạp/rút. Mỗi tài khoản được cấp 100.000 điểm demo.</p>
+        <h2>Ví demo: <span id="spBalance">...</span> điểm</h2>
+        <button class="secondary" onclick="loadSports()">Làm mới trận đấu</button>
+        <div id="spMatches">Đang tải...</div>
       </div>
+      <div class="card"><h2>Lịch sử dự đoán</h2><div id="spHistory"></div></div>
     </section>
 
     <section id="profile" class="section">
@@ -235,6 +230,17 @@
           <button class="secondary" onclick="loadAdmin()">Tải lại</button>
         </div>
         <p class="muted">Chỉ tài khoản có trong sheet Admins với role = admin và status = active mới được duyệt.</p>
+        <div class="card" style="background:#f7f9ff">
+          <h2>⚽ Quản lý dự đoán thể thao · DEMO</h2>
+          <label>Giải đấu</label><input id="spLeague" placeholder="Premier League">
+          <div class="grid"><div><label>Đội chủ nhà</label><input id="spHome" placeholder="Arsenal"></div><div><label>Đội khách</label><input id="spAway" placeholder="Chelsea"></div></div>
+          <label>Giờ bắt đầu trận (giờ địa phương)</label><input id="spKickoff" type="datetime-local">
+          <div class="grid"><div><label>Tỷ lệ chủ nhà</label><input id="spOH" type="number" step="0.01" placeholder="1.85"></div><div><label>Tỷ lệ hòa</label><input id="spOD" type="number" step="0.01" placeholder="3.20"></div></div>
+          <label>Tỷ lệ đội khách</label><input id="spOA" type="number" step="0.01" placeholder="2.10">
+          <button class="primary full" onclick="sportsCreate()">Tạo trận thủ công</button>
+          <div class="grid" style="margin-top:10px"><button class="secondary" onclick="sportsSync('spSyncFixturesAdmin')">Đồng bộ lịch API</button><button class="secondary" onclick="sportsSync('spSyncResultsAdmin')">Đồng bộ kết quả API</button></div>
+          <div id="spAdminMatches"></div>
+        </div>
         <div id="adminList">Bấm “Tải danh sách” để kiểm tra quyền quản trị.</div>
         <button class="primary full" onclick="loadAdmin()">Tải danh sách yêu cầu</button>
       </div>
@@ -334,6 +340,7 @@ function callServer(method, args, onSuccess, onFailure) {
       el.classList.toggle('active', el.dataset.tab === tab);
     });
     document.getElementById(tab).classList.add('active');
+    if (tab === 'games' || tab === 'admin') loadSports();
     if (tab === 'admin') {
       document.getElementById('adminList').textContent =
         'Bấm “Tải danh sách yêu cầu” để kiểm tra quyền quản trị.';
@@ -487,26 +494,40 @@ function refresh() {
   );
 }
 
-  function playScratch() {
-    const tg = window.Telegram && window.Telegram.WebApp;
-    if (!tg || !tg.initData) { notify('Hãy mở Mini App từ Telegram.', true); return; }
-    if (busy) return;
-    const btn = document.getElementById('scratchButton');
-    btn.disabled = true;
-    document.getElementById('scratchResult').textContent = 'Đang mở thẻ...';
-    callServer('scratchCard', [tg.initData], function(result) {
-      document.getElementById('scratchResult').textContent = result.prize > 0
-        ? '🎉 Trúng ' + money(result.prize) + ' - chờ duyệt'
-        : 'Chúc bạn may mắn lần sau!';
-      btn.disabled = true;
-      notify(result.message, false);
-      // Cập nhật lịch sử, số dư chỉ thay đổi nếu Admin đã duyệt.
-      refresh();
-    }, function(error) {
-      document.getElementById('scratchResult').textContent = error.message || String(error);
-      btn.disabled = false;
-    });
+  let sportsData=null;
+  function spFmt(n){return Number(n||0).toLocaleString('vi-VN',{maximumFractionDigits:2});}
+  function loadSports(){
+    if(!tg||!tg.initData)return;
+    rpc('spData',[tg.initData]).then(d=>{sportsData=d;
+      document.getElementById('spBalance').textContent=spFmt(d.balance);
+      const now=Date.now();
+      document.getElementById('spMatches').innerHTML=(d.matches||[]).map(m=>{
+        const active=m.status==='open'&&Date.parse(m.kickoff)>now&&m.homeOdds>1&&m.drawOdds>1&&m.awayOdds>1;
+        return '<div class="item"><strong>'+escapeHtml(m.league)+'</strong><p>'+escapeHtml(m.home)+' — '+escapeHtml(m.away)+'</p><p class="muted small">'+escapeHtml(m.kickoff)+' · '+escapeHtml(m.status)+'</p>'+
+        (active?'<select id="pick-'+escapeHtml(m.id)+'"><option value="home">Chủ nhà '+spFmt(m.homeOdds)+'</option><option value="draw">Hòa '+spFmt(m.drawOdds)+'</option><option value="away">Đội khách '+spFmt(m.awayOdds)+'</option></select><input type="number" min="10" max="10000" step="1" value="100" id="stake-'+escapeHtml(m.id)+'" placeholder="Điểm demo"><button class="primary full" onclick="sportsBet(&quot;'+escapeHtml(m.id)+'&quot;)">Dự đoán (demo)</button>':'<p class="muted small">Chưa nhận dự đoán / chưa có tỷ lệ</p>')+'</div>';
+      }).join('')||'<p class="muted">Chưa có trận đấu. Admin tạo trận hoặc đồng bộ API.</p>';
+      document.getElementById('spHistory').innerHTML=(d.history||[]).map(b=>'<div class="item">'+escapeHtml(b.matchId)+' · '+escapeHtml(b.pick)+' · '+spFmt(b.stake)+' điểm · '+escapeHtml(b.status)+' · Nhận '+spFmt(b.payout)+'</div>').join('')||'<p class="muted">Chưa có dự đoán.</p>';
+      const adminEl=document.getElementById('spAdminMatches');
+      if(d.isAdmin)adminEl.innerHTML='<h2 style="margin-top:18px">Chốt kết quả / sửa tỷ lệ</h2>'+(d.matches||[]).filter(m=>m.status==='open'||m.status==='closed').map(m=>'<div class="item"><strong>'+escapeHtml(m.home)+' — '+escapeHtml(m.away)+'</strong><p class="muted small">'+escapeHtml(m.id)+' · '+escapeHtml(m.kickoff)+'</p><button class="secondary" onclick="sportsOdds(&quot;'+escapeHtml(m.id)+'&quot;)">Sửa tỷ lệ</button> <button class="secondary" onclick="sportsSettle(&quot;'+escapeHtml(m.id)+'&quot;)">Chốt kết quả</button></div>').join('');
+    }).catch(e=>notify(e.message,true));
   }
+  function sportsBet(id){const stake=Number(document.getElementById('stake-'+id).value),pick=document.getElementById('pick-'+id).value;
+    if(!Number.isSafeInteger(stake)||stake<10||stake>10000){notify('Nhập 10-10.000 điểm demo.',true);return;}
+    if(!confirm('Xác nhận dùng '+spFmt(stake)+' điểm DEMO để dự đoán?'))return;
+    callServer('spBet',[tg.initData,id,pick,stake],r=>{notify(r.message,false);loadSports();});
+  }
+  function sportsCreate(){const v=x=>document.getElementById(x).value;const date=new Date(v('spKickoff'));
+    if(!Number.isFinite(date.getTime())){notify('Chọn giờ bắt đầu.',true);return;}
+    callServer('spAdminCreate',[tg.initData,v('spLeague'),v('spHome'),v('spAway'),date.toISOString(),v('spOH'),v('spOD'),v('spOA')],r=>{notify(r.message,false);loadSports();});
+  }
+  function sportsOdds(id){const s=prompt('Nhập 3 tỷ lệ: chủ nhà, hòa, khách (cách nhau dấu phẩy)');if(!s)return;const a=s.split(',').map(x=>Number(x.trim()));if(a.length!==3||a.some(x=>!Number.isFinite(x)||x<=1)){notify('Tỷ lệ không hợp lệ.',true);return;}
+    callServer('spAdminOdds',[tg.initData,id,...a],r=>{notify(r.message,false);loadSports();});
+  }
+  function sportsSettle(id){const s=prompt('Kết quả: home (chủ nhà), draw (hòa), away (khách), void (hủy)');if(!s)return;
+    if(!confirm('Chốt kết quả '+s+'? Không thể sửa sau khi thanh toán demo.'))return;
+    callServer('spAdminSettle',[tg.initData,id,s],r=>{notify(r.message,false);loadSports();});
+  }
+  function sportsSync(method){callServer(method,[tg.initData],r=>{notify(r.message,false);loadSports();});}
 
   function submitTx(event, type) {
     event.preventDefault();
