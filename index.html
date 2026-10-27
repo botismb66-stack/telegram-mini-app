@@ -85,7 +85,6 @@
   </style>
 </head>
 <body>
-<iframe id="gasBridge" title="Apps Script connection" aria-hidden="true" style="position:absolute;width:1px;height:1px;opacity:0;pointer-events:none;border:0" referrerpolicy="no-referrer"></iframe>
 <main>
   <header>
     <h1>Mini App</h1>
@@ -257,75 +256,49 @@
   }
 
   
-// Điền URL /exec trong Apps Script vào đây (không có ?bridge=1).
-const GAS_EXEC_URL = 'https://script.google.com/macros/s/AKfycbxA1gK3N3ga32mtI4D_AF7fv4xZBmMBbQXbKMP3-oMaAwOLECzfQy4j3vNu8DIz5PkS/exec';
-const rpcPending = new Map();
-let rpcId = 0;
-let bridgeReady = false;
-let bridgeWaiters = [];
-const bridgeFrame = document.getElementById('gasBridge');
-function isAppsScriptOrigin(origin) {
+// GitHub Pages -> Cloudflare Worker -> Apps Script HTTP API -> Google Sheets.
+const API_URL = 'https://mb66-miniapp-api.botismb66-a7c.workers.dev/api';
+
+async function rpc(method, args) {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), 45000);
   try {
-    const u = new URL(origin);
-    return u.protocol === 'https:' &&
-      (u.hostname === 'script.google.com' || u.hostname === 'script.googleusercontent.com' ||
-       u.hostname.endsWith('.googleusercontent.com'));
-  } catch (_) { return false; }
-}
-window.addEventListener('message', event => {
-  if (!isAppsScriptOrigin(event.origin)) return;
-  const msg = event.data;
-  if (!msg || msg.channel !== 'miniapp-rpc-v1') return;
-  if (msg.ready === true) {
-    bridgeReady = true;
-    bridgeWaiters.splice(0).forEach(fn => fn());
-    return;
+    const response = await fetch(API_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ method, args }),
+      cache: 'no-store',
+      signal: controller.signal
+    });
+    let data;
+    try {
+      data = await response.json();
+    } catch (_) {
+      throw new Error('Worker không trả về JSON hợp lệ (HTTP ' + response.status + ').');
+    }
+    if (!response.ok || !data || data.ok !== true) {
+      throw new Error((data && data.error) || 'API lỗi HTTP ' + response.status);
+    }
+    return data.result;
+  } catch (error) {
+    if (error.name === 'AbortError') {
+      throw new Error('Kết nối API quá 45 giây. Vui lòng thử lại.');
+    }
+    throw error;
+  } finally {
+    clearTimeout(timer);
   }
-  const pending = rpcPending.get(msg.id);
-  if (!pending) return;
-  rpcPending.delete(msg.id);
-  clearTimeout(pending.timer);
-  if (msg.ok) pending.resolve(msg.result);
-  else pending.reject(new Error(msg.error || 'Apps Script báo lỗi'));
-});
-function waitBridge() {
-  if (bridgeReady) return Promise.resolve();
-  return new Promise((resolve,reject) => {
-    const timer = setTimeout(() => {
-      bridgeWaiters = bridgeWaiters.filter(fn => fn !== done);
-      reject(new Error('Không kết nối được Apps Script Bridge. Kiểm tra URL /exec, GITHUB_ORIGIN và phiên bản Deploy.'));
-    },20000);
-    function done() { clearTimeout(timer); resolve(); }
-    bridgeWaiters.push(done);
-  });
 }
-function initBridge() {
-  if (!/^https:\/\/script\.google\.com\/macros\/s\/.+\/exec$/.test(GAS_EXEC_URL)) {
-    throw new Error('Chưa cấu hình GAS_EXEC_URL trong index.html.');
-  }
-  bridgeFrame.src = GAS_EXEC_URL + '?bridge=1';
-}
-async function rpc(method,args) {
-  await waitBridge();
-  return new Promise((resolve,reject) => {
-    const id = ++rpcId;
-    const timer = setTimeout(() => {
-      rpcPending.delete(id);
-      reject(new Error('Apps Script không phản hồi trong 40 giây.'));
-    },40000);
-    rpcPending.set(id,{resolve,reject,timer});
-    bridgeFrame.contentWindow.postMessage({channel:'miniapp-rpc-v1',id,method,args},'*');
-  });
-}
-function callServer(method,args,onSuccess,onFailure) {
+
+function callServer(method, args, onSuccess, onFailure) {
   setBusy(true);
-  rpc(method,args).then(result => {
+  rpc(method, args).then(result => {
     setBusy(false);
     if (onSuccess) onSuccess(result);
   }).catch(error => {
     setBusy(false);
     if (onFailure) onFailure(error);
-    else notify(error.message || String(error),true);
+    else notify(error.message || String(error), true);
   });
 }
 
@@ -544,7 +517,7 @@ function refresh() {
 
 
   // Khởi chạy ứng dụng sau khi các hàm đã được khai báo.
-  try { initBridge(); refresh(); }
+  try { refresh(); }
   catch (error) {
     document.getElementById('loading').textContent = error.message;
     document.getElementById('retry').style.display = 'block';
