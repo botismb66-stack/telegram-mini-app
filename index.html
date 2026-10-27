@@ -191,6 +191,13 @@
 
     <section id="games" class="section">
       <div class="card">
+        <h2>🎫 Cào thẻ may mắn</h2>
+        <p class="muted">1 lượt miễn phí mỗi ngày (GMT+7). Không trừ số dư. Thưởng tiền phải được Admin duyệt trước khi cộng vào tài khoản.</p>
+        <div id="scratchPanel" style="padding:18px;border-radius:16px;background:#182d60;color:white;text-align:center;margin:12px 0">
+          <div style="font-size:32px">🎁</div>
+          <div id="scratchResult" style="font-size:20px;font-weight:bold;margin:12px 0">Cào để khám phá phần thưởng</div>
+          <button class="primary" id="scratchButton" onclick="playScratch()">CÀO THẺ MIỄN PHÍ</button>
+        </div>
         <h2>Danh sách trò chơi</h2>
         <p class="muted">Game đang hoạt động sẽ hiển thị tại đây.</p>
         <div id="gamesList"></div>
@@ -456,6 +463,27 @@ function refresh() {
     }
   );
 }
+
+  function playScratch() {
+    const tg = window.Telegram && window.Telegram.WebApp;
+    if (!tg || !tg.initData) { notify('Hãy mở Mini App từ Telegram.', true); return; }
+    if (busy) return;
+    const btn = document.getElementById('scratchButton');
+    btn.disabled = true;
+    document.getElementById('scratchResult').textContent = 'Đang mở thẻ...';
+    callServer('scratchCard', [tg.initData], function(result) {
+      document.getElementById('scratchResult').textContent = result.prize > 0
+        ? '🎉 Trúng ' + money(result.prize) + ' - chờ duyệt'
+        : 'Chúc bạn may mắn lần sau!';
+      btn.disabled = true;
+      notify(result.message, false);
+      // Cập nhật lịch sử, số dư chỉ thay đổi nếu Admin đã duyệt.
+      refresh();
+    }, function(error) {
+      document.getElementById('scratchResult').textContent = error.message || String(error);
+      btn.disabled = false;
+    });
+  }
 
   function submitTx(event, type) {
     event.preventDefault();
