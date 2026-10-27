@@ -106,16 +106,16 @@
     </div>
 
     <div class="balance">
-      <div>SỐ DƯ VÍ CHÍNH</div>
+      <div>SỐ DƯ HIỆN TẠI</div>
       <div class="amount" id="balance">0</div>
-      <div class="small">Khả dụng: <strong id="availableBalance">0</strong></div>
+      <div class="small">Số dư đã duyệt · Khả dụng: <strong id="availableBalance">0</strong></div>
     </div>
 
     <div class="tabs">
       <button class="active" data-tab="home">Tổng quan</button>
-      <button data-tab="deposit" style="display:none">Nạp tiền</button>
-      <button data-tab="withdraw" style="display:none">Rút tiền</button>
-      <button data-tab="history" style="display:none">Lịch sử</button>
+      <button data-tab="deposit">Nạp tiền</button>
+      <button data-tab="withdraw">Rút tiền</button>
+      <button data-tab="history">Lịch sử</button>
       <button data-tab="games">Trò chơi</button>
       <button data-tab="profile">Hồ sơ</button>
       <button data-tab="admin" id="adminTab" style="display:none">Quản trị</button>
@@ -125,16 +125,16 @@
       <div class="card">
         <h2>Thao tác nhanh</h2>
         <div class="grid">
-          <button class="primary" onclick="showTab('games')">⚽ Dự đoán trận đấu</button>
-          <button class="secondary" onclick="showTab('games')">Xem dự đoán</button>
+          <button class="primary" onclick="showTab('deposit')">＋ Gửi yêu cầu nạp</button>
+          <button class="secondary" onclick="showTab('withdraw')">↗ Gửi yêu cầu rút</button>
         </div>
       </div>
       <div class="card">
         <div class="row">
-          <h2>Dự đoán thể thao</h2>
-          <button class="secondary" onclick="showTab('games')">Xem dự đoán</button>
+          <h2>Giao dịch gần đây</h2>
+          <button class="secondary" onclick="showTab('history')">Xem tất cả</button>
         </div>
-        <p class="muted">Tiền đặt cược được trừ trực tiếp từ ví chính. Thắng hoặc hoàn cược sẽ được cộng lại vào ví chính.</p>
+        <div id="recentHistory"></div>
       </div>
     </section>
 
@@ -191,7 +191,7 @@
 
     <section id="games" class="section">
       <div class="card"><h2>⚽ Dự đoán thể thao</h2>
-        <p class="muted">Tiền đặt cược được trừ từ ví chính (cùng số dư ở mục Tổng quan).</p>
+        <p class="muted">Tiền đặt cược được trừ trực tiếp từ ví chính. Thắng hoặc hoàn cược sẽ được cộng lại vào ví chính.</p>
         <h2>Số dư ví chính: <span id="spBalance">...</span></h2>
         <button class="secondary" onclick="loadSports()">Làm mới trận đấu</button>
         <div id="spMatches">Đang tải...</div>
@@ -235,7 +235,7 @@
       <div class="card" id="adminSports" style="display:none">
         <p class="muted">Dành cho tài khoản có role admin hoặc odds (status = active).</p>
         <div class="card" style="background:#f7f9ff">
-          <h2>⚽ Quản lý dự đoán thể thao</h2>
+          <h2>⚽ Quản lý trận đấu và tỷ lệ</h2>
           <label>Giải đấu</label><input id="spLeague" placeholder="Premier League">
           <div class="grid"><div><label>Đội chủ nhà</label><input id="spHome" placeholder="Arsenal"></div><div><label>Đội khách</label><input id="spAway" placeholder="Chelsea"></div></div>
           <label>Giờ bắt đầu trận (giờ địa phương)</label><input id="spKickoff" type="datetime-local">
@@ -433,9 +433,9 @@ function callServer(method, args, onSuccess, onFailure) {
       p.display_name || p.first_name || 'Người dùng';
     document.getElementById('username').textContent =
       p.username ? '@' + p.username : 'Telegram ID: ' + p.telegram_id;
-    const roles = data.roles || { finance: false, sports: false };
     document.getElementById('balance').textContent = money(data.balance);
-    document.getElementById('availableBalance').textContent = money(data.available_balance);
+    document.getElementById('availableBalance').textContent = money(data.available_balance == null ? data.balance : data.available_balance);
+    const roles = data.roles || { finance: false, sports: false };
     document.getElementById('adminTab').style.display = (roles.finance || roles.sports) ? '' : 'none';
     document.getElementById('adminFinance').style.display = roles.finance ? '' : 'none';
     document.getElementById('adminSports').style.display = roles.sports ? '' : 'none';
