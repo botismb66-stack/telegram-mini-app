@@ -213,6 +213,19 @@
         <textarea id="profileBio" maxlength="250" placeholder="Giới thiệu về bạn"></textarea>
         <button class="primary full" onclick="saveProfile()">Lưu hồ sơ</button>
       </div>
+      <div class="card">
+        <h2>Thông tin liên kết</h2>
+        <p class="muted">Thông tin dùng để nhận tiền khi rút. Tài khoản ngân hàng sau khi lưu cần Admin xác minh nếu muốn đổi.</p>
+        <label>Số điện thoại</label>
+        <input id="memberPhone" type="tel" maxlength="16" placeholder="VD: 0912345678" autocomplete="tel">
+        <label>Ngân hàng</label>
+        <input id="memberBankName" maxlength="80" placeholder="VD: Vietcombank" autocomplete="off">
+        <label>Số tài khoản ngân hàng</label>
+        <input id="memberBankAccount" inputmode="numeric" maxlength="25" placeholder="Nhập số tài khoản" autocomplete="off">
+        <label>Tên chủ tài khoản</label>
+        <input id="memberBankHolder" maxlength="100" placeholder="NGUYEN VAN A" autocomplete="off">
+        <button class="primary full" onclick="saveMemberLinkInfo()">LƯU THÔNG TIN LIÊN KẾT</button>
+      </div>
     </section>
 
     <section id="admin" class="section">
@@ -425,6 +438,16 @@ function callServer(method, args, onSuccess, onFailure) {
       renderGames(data.games || []);
     document.getElementById('profileName').value = p.display_name || '';
     document.getElementById('profileBio').value = p.bio || '';
+    const link = data.member_link || {};
+    document.getElementById('memberPhone').value = link.phone_number || '';
+    document.getElementById('memberBankName').value = link.bank_name || '';
+    document.getElementById('memberBankAccount').value = link.bank_account || '';
+    document.getElementById('memberBankHolder').value = link.bank_holder || '';
+    if (link.bank_account) {
+      document.getElementById('withdrawMethod').value = 'Chuyển khoản ngân hàng';
+      document.getElementById('withdrawDetails').value =
+        [link.bank_name, link.bank_account, link.bank_holder].filter(Boolean).join(' | ');
+    }
   }
 
   
@@ -519,6 +542,20 @@ function refresh() {
     const bio = document.getElementById('profileBio').value;
     callServer('saveMyProfile', [tg.initData, name, bio], () => {
       notify('Đã lưu hồ sơ.', false);
+      refresh();
+    });
+  }
+
+  function saveMemberLinkInfo() {
+    if (!tg || !tg.initData) { notify('Hãy mở ứng dụng trong Telegram.', true); return; }
+    const args = [tg.initData,
+      document.getElementById('memberPhone').value,
+      document.getElementById('memberBankName').value,
+      document.getElementById('memberBankAccount').value,
+      document.getElementById('memberBankHolder').value
+    ];
+    callServer('saveMemberLink', args, result => {
+      notify(result.message || 'Đã lưu thông tin liên kết.', false);
       refresh();
     });
   }
