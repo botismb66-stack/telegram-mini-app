@@ -106,16 +106,16 @@
     </div>
 
     <div class="balance">
-      <div>SỐ DƯ THỬ NGHIỆM</div>
+      <div>SỐ DƯ HIỆN TẠI</div>
       <div class="amount" id="balance">0</div>
-      <div class="small">Điểm thử nghiệm · Khả dụng: <strong id="availableBalance">0</strong></div>
+      <div class="small">Số dư đã duyệt · Khả dụng: <strong id="availableBalance">0</strong></div>
     </div>
 
     <div class="tabs">
       <button class="active" data-tab="home">Tổng quan</button>
-      <button data-tab="deposit" style="display:none">Nạp tiền</button>
-      <button data-tab="withdraw" style="display:none">Rút tiền</button>
-      <button data-tab="history" style="display:none">Lịch sử</button>
+      <button data-tab="deposit">Nạp tiền</button>
+      <button data-tab="withdraw">Rút tiền</button>
+      <button data-tab="history">Lịch sử</button>
       <button data-tab="games">Trò chơi</button>
       <button data-tab="profile">Hồ sơ</button>
       <button data-tab="admin" id="adminTab" style="display:none">Quản trị</button>
@@ -125,16 +125,16 @@
       <div class="card">
         <h2>Thao tác nhanh</h2>
         <div class="grid">
-          <button class="primary" onclick="showTab('games')">⚽ Dự đoán trận đấu</button>
-          <button class="secondary" onclick="showTab('games')">Xem dự đoán</button>
+          <button class="primary" onclick="showTab('deposit')">＋ Gửi yêu cầu nạp</button>
+          <button class="secondary" onclick="showTab('withdraw')">↗ Gửi yêu cầu rút</button>
         </div>
       </div>
       <div class="card">
         <div class="row">
-          <h2>Thông tin thử nghiệm</h2>
-          <button class="secondary" onclick="showTab('games')">Xem dự đoán</button>
+          <h2>Giao dịch gần đây</h2>
+          <button class="secondary" onclick="showTab('history')">Xem tất cả</button>
         </div>
-        <p class="muted">Điểm dự đoán được lưu tại sheet SportsWallet; lịch sử tại SportsBets.</p>
+        <div id="recentHistory"></div>
       </div>
     </section>
 
@@ -190,9 +190,9 @@
     </section>
 
     <section id="games" class="section">
-      <div class="card"><h2>⚽ Dự đoán thể thao</h2>
-        <p class="muted">Số dư dự đoán được đồng bộ với mục Tổng quan trong chế độ thử nghiệm.</p>
-        <h2>Số dư dự đoán: <span id="spBalance">...</span> điểm</h2>
+      <div class="card"><h2>⚽ Dự đoán thể thao · DEMO</h2>
+        <p class="muted">Điểm thử nghiệm tách biệt hoàn toàn với số dư nạp/rút. Mỗi tài khoản được cấp 100.000 điểm demo.</p>
+        <h2>Ví demo: <span id="spBalance">...</span> điểm</h2>
         <button class="secondary" onclick="loadSports()">Làm mới trận đấu</button>
         <div id="spMatches">Đang tải...</div>
       </div>
@@ -231,7 +231,7 @@
         </div>
         <p class="muted">Chỉ tài khoản có trong sheet Admins với role = admin và status = active mới được duyệt.</p>
         <div class="card" style="background:#f7f9ff">
-          <h2>⚽ Quản lý dự đoán thể thao</h2>
+          <h2>⚽ Quản lý dự đoán thể thao · DEMO</h2>
           <label>Giải đấu</label><input id="spLeague" placeholder="Premier League">
           <div class="grid"><div><label>Đội chủ nhà</label><input id="spHome" placeholder="Arsenal"></div><div><label>Đội khách</label><input id="spAway" placeholder="Chelsea"></div></div>
           <label>Giờ bắt đầu trận (giờ địa phương)</label><input id="spKickoff" type="datetime-local">
@@ -241,8 +241,8 @@
           <div class="grid" style="margin-top:10px"><button class="secondary" onclick="sportsSync('spSyncFixturesAdmin')">Đồng bộ lịch API</button><button class="secondary" onclick="sportsSync('spSyncResultsAdmin')">Đồng bộ kết quả API</button></div>
           <div id="spAdminMatches"></div>
         </div>
-        <div id="adminList" style="display:none"></div>
-        
+        <div id="adminList">Bấm “Tải danh sách” để kiểm tra quyền quản trị.</div>
+        <button class="primary full" onclick="loadAdmin()">Tải danh sách yêu cầu</button>
       </div>
     </section>
   </div>
@@ -434,15 +434,15 @@ function callServer(method, args, onSuccess, onFailure) {
       p.display_name || p.first_name || 'Người dùng';
     document.getElementById('username').textContent =
       p.username ? '@' + p.username : 'Telegram ID: ' + p.telegram_id;
-    document.getElementById('balance').textContent = money(data.test_balance);
-    document.getElementById('availableBalance').textContent = money(data.test_balance);
+    document.getElementById('balance').textContent = money(data.balance);
+    document.getElementById('availableBalance').textContent = money(data.available_balance == null ? data.balance : data.available_balance);
     document.getElementById('adminTab').style.display = data.isAdmin ? '' : 'none';
     document.getElementById('recentHistory').innerHTML =
       renderHistory((data.history || []).slice(0, 3));
     document.getElementById('allHistory').innerHTML =
       renderHistory(data.history || []);
-    const gamesList = document.getElementById('gamesList');
-    if (gamesList) gamesList.innerHTML = renderGames(data.games || []);
+    document.getElementById('gamesList').innerHTML =
+      renderGames(data.games || []);
     document.getElementById('profileName').value = p.display_name || '';
     document.getElementById('profileBio').value = p.bio || '';
     const link = data.member_link || {};
@@ -504,7 +504,7 @@ function refresh() {
       document.getElementById('spMatches').innerHTML=(d.matches||[]).map(m=>{
         const active=m.status==='open'&&Date.parse(m.kickoff)>now&&m.homeOdds>1&&m.drawOdds>1&&m.awayOdds>1;
         return '<div class="item"><strong>'+escapeHtml(m.league)+'</strong><p>'+escapeHtml(m.home)+' — '+escapeHtml(m.away)+'</p><p class="muted small">'+escapeHtml(m.kickoff)+' · '+escapeHtml(m.status)+'</p>'+
-        (active?'<select id="pick-'+escapeHtml(m.id)+'"><option value="home">Chủ nhà '+spFmt(m.homeOdds)+'</option><option value="draw">Hòa '+spFmt(m.drawOdds)+'</option><option value="away">Đội khách '+spFmt(m.awayOdds)+'</option></select><input type="number" min="10" max="10000" step="1" value="100" id="stake-'+escapeHtml(m.id)+'" placeholder="Điểm demo"><button class="primary full" onclick="sportsBet(&quot;'+escapeHtml(m.id)+'&quot;)">Dự đoán</button>':'<p class="muted small">Chưa nhận dự đoán / chưa có tỷ lệ</p>')+'</div>';
+        (active?'<select id="pick-'+escapeHtml(m.id)+'"><option value="home">Chủ nhà '+spFmt(m.homeOdds)+'</option><option value="draw">Hòa '+spFmt(m.drawOdds)+'</option><option value="away">Đội khách '+spFmt(m.awayOdds)+'</option></select><input type="number" min="10" max="10000" step="1" value="100" id="stake-'+escapeHtml(m.id)+'" placeholder="Điểm demo"><button class="primary full" onclick="sportsBet(&quot;'+escapeHtml(m.id)+'&quot;)">Dự đoán (demo)</button>':'<p class="muted small">Chưa nhận dự đoán / chưa có tỷ lệ</p>')+'</div>';
       }).join('')||'<p class="muted">Chưa có trận đấu. Admin tạo trận hoặc đồng bộ API.</p>';
       document.getElementById('spHistory').innerHTML=(d.history||[]).map(b=>'<div class="item">'+escapeHtml(b.matchId)+' · '+escapeHtml(b.pick)+' · '+spFmt(b.stake)+' điểm · '+escapeHtml(b.status)+' · Nhận '+spFmt(b.payout)+'</div>').join('')||'<p class="muted">Chưa có dự đoán.</p>';
       const adminEl=document.getElementById('spAdminMatches');
@@ -512,13 +512,13 @@ function refresh() {
     }).catch(e=>notify(e.message,true));
   }
   function sportsBet(id){const stake=Number(document.getElementById('stake-'+id).value),pick=document.getElementById('pick-'+id).value;
-    if(!Number.isSafeInteger(stake)||stake<10||stake>10000){notify('Nhập 10-10.000 điểm.',true);return;}
-    if(!confirm('Xác nhận dùng '+spFmt(stake)+' điểm để dự đoán?'))return;
-    callServer('spBet',[tg.initData,id,pick,stake],r=>{notify(r.message,false);loadSports();refresh();});
+    if(!Number.isSafeInteger(stake)||stake<10||stake>10000){notify('Nhập 10-10.000 điểm demo.',true);return;}
+    if(!confirm('Xác nhận dùng '+spFmt(stake)+' điểm DEMO để dự đoán?'))return;
+    callServer('spBet',[tg.initData,id,pick,stake],r=>{notify(r.message,false);loadSports();});
   }
   function sportsCreate(){const v=x=>document.getElementById(x).value;const date=new Date(v('spKickoff'));
     if(!Number.isFinite(date.getTime())){notify('Chọn giờ bắt đầu.',true);return;}
-    callServer('spAdminCreate',[tg.initData,v('spLeague'),v('spHome'),v('spAway'),date.toISOString(),v('spOH'),v('spOD'),v('spOA')],r=>{notify(r.message,false);loadSports();refresh();});
+    callServer('spAdminCreate',[tg.initData,v('spLeague'),v('spHome'),v('spAway'),date.toISOString(),v('spOH'),v('spOD'),v('spOA')],r=>{notify(r.message,false);loadSports();});
   }
   function sportsOdds(id){const s=prompt('Nhập 3 tỷ lệ: chủ nhà, hòa, khách (cách nhau dấu phẩy)');if(!s)return;const a=s.split(',').map(x=>Number(x.trim()));if(a.length!==3||a.some(x=>!Number.isFinite(x)||x<=1)){notify('Tỷ lệ không hợp lệ.',true);return;}
     callServer('spAdminOdds',[tg.initData,id,...a],r=>{notify(r.message,false);loadSports();});
