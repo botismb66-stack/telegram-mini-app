@@ -1012,7 +1012,16 @@ function refresh() {
 
   let sportsData=null;
 
-  function spFmt(n){return Number(n||0).toLocaleString('vi-VN',{maximumFractionDigits:2});}
+  function spNum(v) {
+  if (typeof v === 'number') return v;
+  return Number(String(v ?? '').trim().replace(',', '.'));
+}
+
+function spFmt(n) {
+  return spNum(n || 0).toLocaleString('vi-VN', {
+    maximumFractionDigits: 2
+  });
+}
 
   function loadSports(){
 
@@ -1026,7 +1035,12 @@ function refresh() {
 
       document.getElementById('spMatches').innerHTML=(d.matches||[]).map(m=>{
 
-        const active=m.status==='open'&&Date.parse(m.kickoff)>now&&m.homeOdds>1&&m.drawOdds>1&&m.awayOdds>1;
+        const active =
+  String(m.status).trim().toLowerCase() === 'open' &&
+  Date.parse(m.kickoff) > now &&
+  spNum(m.homeOdds) > 1 &&
+  spNum(m.drawOdds) > 1 &&
+  spNum(m.awayOdds) > 1;
 
         return '<div class="item"><strong>'+escapeHtml(m.league)+'</strong><p>'+escapeHtml(m.home)+' — '+escapeHtml(m.away)+'</p><p class="muted small">'+escapeHtml(m.kickoff)+' · '+escapeHtml(m.status)+'</p>'+
 
