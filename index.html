@@ -96,6 +96,16 @@
 .tx-bottom{margin-top:16px;display:flex;gap:5px;flex-wrap:wrap;justify-content:center}.tx-dot{width:15px;height:15px;border-radius:50%;background:linear-gradient(#fff,#b9c5d0);border:1px solid #bbb}.tx-dot.tai{background:linear-gradient(#5b5b5b,#050505);border-color:#bbb}.tx-dot.triple{background:#e9a12d}
 .tx-commit{font-size:11px;overflow-wrap:anywhere;margin-top:12px;color:#f6dcb3}.tx-sub{font-size:12px;color:#7a6870;margin:9px 0}
 @media(max-width:380px){.tx-arena{grid-template-columns:minmax(0,1fr) 88px minmax(0,1fr);gap:5px}.tx-dial strong{font-size:34px}.tx-side input{font-size:14px}}
+  
+    /* Tài/Xỉu: public, per-round stake and hypothetical house payout */
+    .tx-stat-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;margin:12px 0 6px}
+    .tx-stat-side{min-width:0;padding:10px 8px;border:1px solid #b88c3b;border-radius:12px;background:rgba(33,12,8,.56);color:#fff0c9;text-align:center}
+    .tx-stat-name{font-size:11px;letter-spacing:.3px;font-weight:800;color:#ffcf70}
+    .tx-stat-side>strong{display:block;font-size:18px;line-height:1.6;overflow-wrap:anywhere;color:#fff}
+    .tx-stat-note{font-size:11px;line-height:1.6;overflow-wrap:anywhere}
+    .tx-stat-note b{color:#ffdf88}
+    .tx-stat-footer{text-align:center;color:#fff0c9;font-size:12px;margin-bottom:8px}
+    .tx-stat-footer b{color:#fff;font-size:14px}
   </style>
 </head>
 <body>
@@ -212,12 +222,17 @@
           <div class="tx-dial"><strong id="txCountdown">--</strong><small>GIÂY</small></div>
           <div class="tx-side"><h3>XỈU</h3><input id="txStakeXiu" type="text" inputmode="numeric" autocomplete="off" value="100" aria-label="Tiền cược Xỉu"><button class="txBetButton" onclick="txPlaceBet('XIU')">CƯỢC XỈU</button></div>
         </div>
+        <div class="tx-stat-grid" aria-label="Thống kê tiền cược phiên hiện tại">
+          <div class="tx-stat-side"><div class="tx-stat-name">TÀI · TỔNG CƯỢC</div><strong id="txTaiStakeTotal">0</strong><div class="tx-stat-note">Nếu Tài thắng, trả <b id="txTaiPayout">0</b></div><div class="tx-stat-note">Lãi/lỗ nhà cái: <b id="txTaiNet">0</b></div></div>
+          <div class="tx-stat-side"><div class="tx-stat-name">XỈU · TỔNG CƯỢC</div><strong id="txXiuStakeTotal">0</strong><div class="tx-stat-note">Nếu Xỉu thắng, trả <b id="txXiuPayout">0</b></div><div class="tx-stat-note">Lãi/lỗ nhà cái: <b id="txXiuNet">0</b></div></div>
+        </div>
+        <div class="tx-stat-footer">Tổng nhận cược hai cửa: <b id="txTotalStake">0</b><span> · Bộ ba: trả 0</span></div>
         <div id="txDots" class="tx-bottom"></div>
         <div id="txRoundId" class="tx-sub" style="color:#ffe9ad;text-align:center">Đang tải phiên...</div>
         <div class="tx-commit">SHA-256 cam kết: <span id="txCommit">...</span></div>
         <button class="secondary full" onclick="loadTaiXiu()">Làm mới phiên</button>
       </div>
-      <p class="tx-sub">60 giây/phiên · Tài 11–17 · Xỉu 4–10 · Bộ ba đồng số: cả hai cửa thua · Nhập số thập phân tối đa 2 chữ số.</p>
+      <p class="tx-sub">60 giây/phiên · Tài 11–17 · Xỉu 4–10 · Bộ ba đồng số: cả hai cửa thua · Số tiền nhập có dấu phẩy hàng nghìn. Thống kê chỉ tính cược đã xác nhận, trả thưởng bao gồm vốn.</p>
       <div class="card"><h2>20 kết quả gần nhất</h2><div id="txRecent"></div></div>
       <div class="card"><h2>Lịch sử cược Tài/Xỉu</h2><div id="txHistory"></div></div>
     </section>
@@ -569,6 +584,16 @@ function refresh() {
       txDataCache=d;
       const t=Date.parse(d.serverTime);if(Number.isFinite(t))txServerOffset=t-(requestStart+Date.now())/2;
       document.getElementById('txBalance').textContent=txFmt(d.balance);
+      const stats=d.roundTotals||{};
+      const moneyStat=(id,value)=>{const el=document.getElementById(id);if(el)el.textContent=txFmt(value||0);};
+      moneyStat('txTaiStakeTotal',stats.taiStake);
+      moneyStat('txXiuStakeTotal',stats.xiuStake);
+      moneyStat('txTotalStake',stats.totalStake);
+      moneyStat('txTaiPayout',stats.taiPayout);
+      moneyStat('txXiuPayout',stats.xiuPayout);
+      const netStat=(id,value)=>{const el=document.getElementById(id);if(!el)return;const n=Number(value||0);el.textContent=(n>0?'+':'')+txFmt(n);el.style.color=n<0?'#ff9c9c':'#b9ffbf';};
+      netStat('txTaiNet',stats.taiNet);
+      netStat('txXiuNet',stats.xiuNet);
       const r=d.current;
       document.getElementById('txRoundId').textContent=r?'Phiên '+r.id:'Đang chờ phiên mới';
       document.getElementById('txCommit').textContent=r?r.commit:'--';
