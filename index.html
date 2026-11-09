@@ -517,6 +517,9 @@ function refresh() {
   let txRefreshTimer=null;
   let txLoading=false;
   let txSubmitting=false;
+  let txLastRenderKey="";
+  let txLastHistoryKey="";
+  let txLastErrorAt=0;
   function txFmt(n){return Number(n||0).toLocaleString('vi-VN',{maximumFractionDigits:2});}
   function txTimeLeft(){
     const r=txDataCache&&txDataCache.current;
@@ -533,11 +536,15 @@ function refresh() {
     const el=document.getElementById(id);
     if(!el)return;
     el.value='100';
+    el.addEventListener('compositionstart',()=>{el.dataset.composing='1';});
+    el.addEventListener('compositionend',()=>{el.dataset.composing='0';el.dispatchEvent(new Event('input'));});
     el.addEventListener('input',()=>{
+      if(el.dataset.composing==='1')return;
       const old=el.value;
       const pos=el.selectionStart == null ? old.length : el.selectionStart;
       const digitsBefore=old.slice(0,pos).replace(/\D/g,'').length;
       const formatted=txFormatThousands(old);
+      if(el.value===formatted)return;
       el.value=formatted;
       let newPos=0, seen=0;
       while(newPos<formatted.length && seen<digitsBefore){
@@ -557,27 +564,38 @@ function refresh() {
   function loadTaiXiu(){
     if(!tg||!tg.initData||txLoading)return;
     txLoading=true;
+    const requestStart=Date.now();
     rpc('txData',[tg.initData]).then(d=>{
       txDataCache=d;
-      const t=Date.parse(d.serverTime);if(Number.isFinite(t))txServerOffset=t-Date.now();
+      const t=Date.parse(d.serverTime);if(Number.isFinite(t))txServerOffset=t-(requestStart+Date.now())/2;
       document.getElementById('txBalance').textContent=txFmt(d.balance);
       const r=d.current;
       document.getElementById('txRoundId').textContent=r?'Phiên '+r.id:'Đang chờ phiên mới';
       document.getElementById('txCommit').textContent=r?r.commit:'--';
       // Không thay thế DOM của ô nhập, giữ nguyên số và vị trí con trỏ.
       const recent=d.recent||[];
+      const renderKey=JSON.stringify(recent);
+      if(renderKey!==txLastRenderKey){
+      txLastRenderKey=renderKey;
       document.getElementById('txDots').innerHTML=recent.slice(0,15).reverse().map(x=>
         '<span title="'+escapeHtml(x.id)+' · '+escapeHtml(x.result)+'" class="tx-dot '+(x.result==='TAI'?'tai':x.result==='TRIPLE'?'triple':'')+'"></span>').join('');
       document.getElementById('txRecent').innerHTML=recent.map(x=>
         '<div class="item"><strong>'+escapeHtml(x.id)+'</strong> · '+escapeHtml(x.result)+
         ' · '+(x.dice||[]).map(escapeHtml).join(' - ')+' = '+escapeHtml(x.total)+
         '<p><button class="secondary" onclick="txVerifyRound('+JSON.stringify(x.id).replace(/"/g,'&quot;')+')">Kiểm chứng kết quả</button></p></div>').join('')||'<p class="muted">Chưa có kết quả.</p>';
+      }
+      const historyKey=JSON.stringify(d.history||[]);
+      if(historyKey!==txLastHistoryKey){
+      txLastHistoryKey=historyKey;
       document.getElementById('txHistory').innerHTML=(d.history||[]).map(x=>
         '<div class="item">'+escapeHtml(x.roundId)+' · '+escapeHtml(x.pick)+' · '+txFmt(x.stake)+
         ' · '+escapeHtml(x.status)+' · Nhận '+txFmt(x.payout)+'</div>').join('')||'<p class="muted">Chưa có cược.</p>';
+      }
       if(d.isAdmin&&document.getElementById('admin').classList.contains('active'))txAdminStats();
       txTimeLeft();
-    }).catch(e=>notify(e.message,true)).finally(()=>{txLoading=false;});
+    }).catch(e=>{
+      if(Date.now()-txLastErrorAt>30000){txLastErrorAt=Date.now();notify(e.message,true);}
+    }).finally(()=>{txLoading=false;});
   }
   function txPlaceBet(pick){
     if(txSubmitting||!txDataCache||!txDataCache.current)return;
@@ -593,9 +611,12 @@ function refresh() {
       // Không gọi refresh() vì refresh() có thể làm mới dữ liệu form khác.
     }).catch(e=>notify(e.message,true)).finally(()=>{txSubmitting=false;txTimeLeft();});
   }
-  txCountdownTimer=setInterval(txTimeLeft,1000);
+  txCountdownTimer=setInterval(()=>{if(document.visibilityState==='visible')txTimeLeft();},1000);
+  document.addEventListener('visibilitychange',()=>{
+    if(document.visibilityState==='visible' && document.getElementById('games').classList.contains('active'))loadTaiXiu();
+  });
   txRefreshTimer=setInterval(()=>{
-    if(document.getElementById('games').classList.contains('active')&&!txSubmitting)loadTaiXiu();
+    if(document.visibilityState==='visible' && document.getElementById('games').classList.contains('active') && !txSubmitting)loadTaiXiu();
   },12000);
   function txVerifyRound(id){
     callServer('txVerify',[tg.initData,id],result=>{
