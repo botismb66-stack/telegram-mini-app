@@ -190,13 +190,14 @@
     </section>
 
     <section id="games" class="section">
-      <div class="card"><h2>⚽ Dự đoán thể thao</h2>
-        <p class="muted">Tiền đặt cược được trừ trực tiếp từ ví chính. Thắng hoặc hoàn cược sẽ được cộng lại vào ví chính.</p>
-        <h2>Số dư ví chính: <span id="spBalance">...</span></h2>
-        <button class="secondary" onclick="loadSports()">Làm mới trận đấu</button>
-        <div id="spMatches">Đang tải...</div>
+      <div class="card"><h2>🎲 Tài / Xỉu</h2>
+        <p class="muted">Mỗi phiên 60 giây · Tỷ lệ 1.95 · Tài 11–17, Xỉu 4–10 · Bộ ba đồng số: cả hai cửa thua.</p>
+        <h2>Số dư ví chính: <span id="txBalance">...</span></h2>
+        <div id="txRound">Đang tải phiên...</div>
+        <button class="secondary" onclick="loadTaiXiu()">Làm mới phiên</button>
       </div>
-      <div class="card"><h2>Lịch sử dự đoán</h2><div id="spHistory"></div></div>
+      <div class="card"><h2>20 kết quả gần nhất</h2><div id="txRecent"></div></div>
+      <div class="card"><h2>Lịch sử cược Tài/Xỉu</h2><div id="txHistory"></div></div>
     </section>
 
     <section id="profile" class="section">
@@ -233,18 +234,10 @@
         <div id="adminList"></div>
       </div>
       <div class="card" id="adminSports" style="display:none">
-        <p class="muted">Dành cho tài khoản có role admin hoặc odds (status = active).</p>
-        <div class="card" style="background:#f7f9ff">
-          <h2>⚽ Quản lý trận đấu và tỷ lệ</h2>
-          <label>Giải đấu</label><input id="spLeague" placeholder="Premier League">
-          <div class="grid"><div><label>Đội chủ nhà</label><input id="spHome" placeholder="Arsenal"></div><div><label>Đội khách</label><input id="spAway" placeholder="Chelsea"></div></div>
-          <label>Giờ bắt đầu trận (giờ địa phương)</label><input id="spKickoff" type="datetime-local">
-          <div class="grid"><div><label>Tỷ lệ chủ nhà (HDC)</label><input id="spOH" type="number" step="0.01" placeholder="1.85"></div><div><label>Không dùng (HDC)</label><input id="spOD" type="number" step="0.01" placeholder="3.20"></div></div>
-          <label>Tỷ lệ đội khách (HDC)</label><input id="spOA" type="number" step="0.01" placeholder="2.10">
-          <p class="muted small">Quản lý kèo HDC trên sheet SportsMatches: L = HDC chủ nhà, F = tỷ lệ chủ, H = tỷ lệ khách, M = ID trận football-data.org, I = open khi đã sẵn sàng. Trận thủ công chưa có ID API sẽ không tự kết toán.</p>
-          <div class="grid" style="margin-top:10px"><button class="secondary" onclick="sportsSync('spSyncFixturesAdmin')">Đồng bộ lịch API</button><button class="secondary" onclick="sportsSync('spSyncResultsAdmin')">Đồng bộ kết quả API</button></div>
-          <div id="spAdminMatches"></div>
-        </div>
+        <h2>🎲 Quản trị Tài/Xỉu</h2>
+        <p class="muted">Role admin hoặc odds (active). Kết quả đã cam kết, quản trị viên không thể sửa kết quả qua giao diện.</p>
+        <div id="txAdminStats">Đang tải...</div>
+        <button class="secondary" onclick="txAdminRefresh()">Cập nhật trạng thái phiên</button>
       </div>
     </section>
   </div>
@@ -342,7 +335,7 @@ function callServer(method, args, onSuccess, onFailure) {
       el.classList.toggle('active', el.dataset.tab === tab);
     });
     document.getElementById(tab).classList.add('active');
-    if (tab === 'games' || tab === 'admin') loadSports();
+    if (tab === 'games' || tab === 'admin') loadTaiXiu();
     if (tab === 'admin' && dashboard && dashboard.roles && dashboard.roles.finance) loadAdmin();
   }
 
@@ -496,41 +489,64 @@ function refresh() {
   );
 }
 
-  let sportsData=null;
-  function spNum(n){if(typeof n==='number')return n;return Number(String(n??'').trim().replace(',','.'));}
-  function spFmt(n){return spNum(n||0).toLocaleString('vi-VN',{maximumFractionDigits:2});}
-  function loadSports(){
+  let txDataCache=null;
+  let txServerOffset=0;
+  let txCountdownTimer=null;
+  function txFmt(n){return Number(n||0).toLocaleString('vi-VN',{maximumFractionDigits:2});}
+  function txTimeLeft(){
+    if(!txDataCache||!txDataCache.current)return;
+    const left=Math.max(0,Math.ceil((Date.parse(txDataCache.current.closesAt)-(Date.now()+txServerOffset))/1000));
+    const el=document.getElementById('txCountdown');if(el)el.textContent=left+' giây';
+    const bet=document.getElementById('txPlaceBet');if(bet)bet.disabled=left===0;
+  }
+  function loadTaiXiu(){
     if(!tg||!tg.initData)return;
-    rpc('spData',[tg.initData]).then(d=>{sportsData=d;
-      document.getElementById('spBalance').textContent=spFmt(d.balance);
-      const now=Date.now();
-      document.getElementById('spMatches').innerHTML=(d.matches||[]).map(m=>{
-        const active=m.status==='open'&&Date.parse(m.kickoff)>now&&m.hdc!==null&&spNum(m.homeOdds)>1&&spNum(m.awayOdds)>1;
-        return '<div class="item"><strong>'+escapeHtml(m.league)+'</strong><p>'+escapeHtml(m.home)+' — '+escapeHtml(m.away)+'</p><p class="muted small">'+escapeHtml(m.kickoff)+' · HDC chủ nhà '+(m.hdc===null?'chưa nhập':spFmt(m.hdc))+' · '+escapeHtml(m.status)+'</p>'+
-        (active?'<select id="pick-'+escapeHtml(m.id)+'"><option value="home">Chủ nhà '+spFmt(m.homeOdds)+'</option><option value="away">Đội khách '+spFmt(m.awayOdds)+'</option></select><input type="number" min="10" max="10000" step="1" value="100" id="stake-'+escapeHtml(m.id)+'" placeholder="Số tiền cược"><button class="primary full" onclick="sportsBet(&quot;'+escapeHtml(m.id)+'&quot;)">Dự đoán</button>':'<p class="muted small">'+(Date.parse(m.kickoff)<=now?'Đã hết thời gian dự đoán':m.status!=='open'?'Trận chưa mở dự đoán':'Chưa nhập HDC và đủ hai tỷ lệ')+'</p>')+'</div>';
-      }).join('')||'<p class="muted">Chưa có trận đấu. Admin tạo trận hoặc đồng bộ API.</p>';
-      document.getElementById('spHistory').innerHTML=(d.history||[]).map(b=>'<div class="item">'+escapeHtml(b.matchId)+' · '+escapeHtml(b.pick)+' (HDC '+spFmt(b.hdc)+') · '+spFmt(b.stake)+' · '+escapeHtml(b.status)+' · Nhận '+spFmt(b.payout)+'</div>').join('')||'<p class="muted">Chưa có dự đoán.</p>';
-      const adminEl=document.getElementById('spAdminMatches');
-      if(d.isAdmin)adminEl.innerHTML='<h2 style="margin-top:18px">Quản lý kết quả API / hoàn cược</h2>'+(d.matches||[]).filter(m=>m.status==='open'||m.status==='closed').map(m=>'<div class="item"><strong>'+escapeHtml(m.home)+' — '+escapeHtml(m.away)+'</strong><p class="muted small">'+escapeHtml(m.id)+' · '+escapeHtml(m.kickoff)+'</p><button class="secondary" onclick="sportsSettle(&quot;'+escapeHtml(m.id)+'&quot;)">Hủy và hoàn cược</button></div>').join('');
+    rpc('txData',[tg.initData]).then(d=>{
+      txDataCache=d;txServerOffset=Date.parse(d.serverTime)-Date.now();
+      document.getElementById('txBalance').textContent=txFmt(d.balance);
+      const r=d.current;
+      document.getElementById('txRound').innerHTML=r?
+        '<div class="item"><strong>Phiên '+escapeHtml(r.id)+'</strong><p>Còn lại: <strong id="txCountdown">...</strong></p>'+
+        '<p class="muted small">SHA-256 cam kết: '+escapeHtml(r.commit)+'</p>'+
+        '<label>Chọn cửa</label><select id="txPick"><option value="TAI">TÀI (11–17)</option><option value="XIU">XỈU (4–10)</option></select>'+
+        '<label>Số tiền cược</label><input id="txStake" type="number" min="'+d.minStake+'" max="'+d.maxStake+'" step="1" value="100">'+
+        '<button id="txPlaceBet" class="primary full" onclick="txPlaceBet()">Đặt cược · x1.95</button></div>':
+        '<p class="muted">Đang chờ phiên mới. Nhấn Làm mới phiên.</p>';
+      document.getElementById('txRecent').innerHTML=(d.recent||[]).map(x=>
+        '<div class="item"><strong>'+escapeHtml(x.id)+'</strong> · '+escapeHtml(x.result)+
+        ' · '+(x.dice||[]).join(' - ')+' = '+x.total+
+        '<p><button class="secondary" onclick="txVerifyRound('+JSON.stringify(x.id).replace(/"/g,'&quot;')+')">Kiểm chứng kết quả</button></p></div>').join('')||'<p class="muted">Chưa có kết quả.</p>';
+      document.getElementById('txHistory').innerHTML=(d.history||[]).map(x=>
+        '<div class="item">'+escapeHtml(x.roundId)+' · '+escapeHtml(x.pick)+' · '+txFmt(x.stake)+
+        ' · '+escapeHtml(x.status)+' · Nhận '+txFmt(x.payout)+'</div>').join('')||'<p class="muted">Chưa có cược.</p>';
+      if(d.isAdmin)txAdminStats();
+      if(txCountdownTimer)clearInterval(txCountdownTimer);
+      txTimeLeft();txCountdownTimer=setInterval(txTimeLeft,1000);
     }).catch(e=>notify(e.message,true));
   }
-  function sportsBet(id){const stake=Number(document.getElementById('stake-'+id).value),pick=document.getElementById('pick-'+id).value;
-    if(!Number.isSafeInteger(stake)||stake<10||stake>10000){notify('Nhập số tiền từ 10 đến 10.000.',true);return;}
-    if(!confirm('Xác nhận đặt '+spFmt(stake)+' từ ví chính?'))return;
-    callServer('spBet',[tg.initData,id,pick,stake],r=>{notify(r.message,false);loadSports();refresh();});
+  function txPlaceBet(){
+    if(!txDataCache||!txDataCache.current)return;
+    const r=txDataCache.current;
+    const stake=Number(document.getElementById('txStake').value);
+    const pick=document.getElementById('txPick').value;
+    if(!Number.isSafeInteger(stake)||stake<txDataCache.minStake||stake>txDataCache.maxStake){notify('Số tiền cược không hợp lệ.',true);return;}
+    if(Date.now()+txServerOffset>=Date.parse(r.closesAt)){notify('Phiên đã đóng.',true);return;}
+    if(!confirm('Đặt '+txFmt(stake)+' vào cửa '+pick+' từ ví chính?'))return;
+    callServer('txBet',[tg.initData,r.id,pick,stake],result=>{notify(result.message,false);loadTaiXiu();refresh();});
   }
-  function sportsCreate(){const v=x=>document.getElementById(x).value;const date=new Date(v('spKickoff'));
-    if(!Number.isFinite(date.getTime())){notify('Chọn giờ bắt đầu.',true);return;}
-    callServer('spAdminCreate',[tg.initData,v('spLeague'),v('spHome'),v('spAway'),date.toISOString(),v('spOH'),v('spOD'),v('spOA')],r=>{notify(r.message,false);loadSports();});
+  function txVerifyRound(id){
+    callServer('txVerify',[tg.initData,id],result=>{
+      notify(result.valid?'Kết quả hợp lệ · '+result.dice.join('-')+' = '+result.total:'CẢNH BÁO: Kết quả kiểm chứng không khớp!',!result.valid);
+    });
   }
-  function sportsOdds(id){const s=prompt('Nhập 3 tỷ lệ cách nhau bằng dấu cách hoặc chấm phẩy. Ví dụ: 1,63 3,76 3,83');if(!s)return;const a=s.trim().split(/[;\s]+/).map(spNum);if(a.length!==3||a.some(x=>!Number.isFinite(x)||x<=1)){notify('Tỷ lệ không hợp lệ.',true);return;}
-    callServer('spAdminOdds',[tg.initData,id,...a],r=>{notify(r.message,false);loadSports();});
+  function txAdminStats(){
+    if(!tg||!tg.initData)return;
+    rpc('txAdminStats',[tg.initData]).then(d=>{
+      const el=document.getElementById('txAdminStats');
+      if(el)el.innerHTML='<p>Phiên: '+d.rounds+' · Phiếu: '+d.bets+'</p><p>Tổng cược: '+txFmt(d.staked)+' · Tổng trả: '+txFmt(d.paid)+'</p>';
+    }).catch(e=>notify(e.message,true));
   }
-  function sportsSettle(id){const s='void';
-    if(!confirm('Hủy trận và hoàn toàn bộ cược? Không thể hoàn tác.'))return;
-    callServer('spAdminSettle',[tg.initData,id,s],r=>{notify(r.message,false);loadSports();});
-  }
-  function sportsSync(method){callServer(method,[tg.initData],r=>{notify(r.message,false);loadSports();});}
+  function txAdminRefresh(){callServer('txAdminRunNow',[tg.initData],r=>{notify(r.message,false);loadTaiXiu();});}
 
   function submitTx(event, type) {
     event.preventDefault();
