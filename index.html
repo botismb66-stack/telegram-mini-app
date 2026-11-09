@@ -106,6 +106,14 @@
     .tx-stat-note b{color:#ffdf88}
     .tx-stat-footer{text-align:center;color:#fff0c9;font-size:12px;margin-bottom:8px}
     .tx-stat-footer b{color:#fff;font-size:14px}
+
+/* Nút chọn nhanh tiền cược, không gây tải lại giao diện */
+.tx-presets{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:6px;margin:13px 0 5px}
+.tx-preset{min-width:0;padding:10px 2px;border:1px solid #f7d183;border-radius:10px;background:linear-gradient(180deg,#71331a,#421609);color:#ffe9b2;font-size:clamp(10px,2.8vw,13px);font-weight:800;font-variant-numeric:tabular-nums;touch-action:manipulation}
+.tx-preset:active{transform:scale(.97)}
+.tx-preset.active{background:linear-gradient(180deg,#ffe7a6,#e6a32f);color:#552300;border-color:#fff3c4}
+.tx-preset:disabled{opacity:.4;cursor:not-allowed}
+.tx-preset-help{text-align:center;color:#ffdfad;font-size:11px;margin:6px 0 3px}
   </style>
 </head>
 <body>
@@ -221,6 +229,17 @@
           <div class="tx-side"><h3>TÀI</h3><input id="txStakeTai" type="text" inputmode="numeric" autocomplete="off" value="100" aria-label="Tiền cược Tài"><button class="txBetButton" onclick="txPlaceBet('TAI')">CƯỢC TÀI</button></div>
           <div class="tx-dial"><strong id="txCountdown">--</strong><small>GIÂY</small></div>
           <div class="tx-side"><h3>XỈU</h3><input id="txStakeXiu" type="text" inputmode="numeric" autocomplete="off" value="100" aria-label="Tiền cược Xỉu"><button class="txBetButton" onclick="txPlaceBet('XIU')">CƯỢC XỈU</button></div>
+        </div>
+        <div class="tx-preset-help">CHỌN NHANH TIỀN CƯỢC · Chạm vào ô TÀI hoặc XỈU để chọn cửa</div>
+        <div class="tx-presets" id="txPresets" aria-label="Mức tiền cược đề xuất">
+          <button type="button" class="tx-preset" data-stake="100" onclick="txChoosePreset(100)">100</button>
+          <button type="button" class="tx-preset" data-stake="500" onclick="txChoosePreset(500)">500</button>
+          <button type="button" class="tx-preset" data-stake="1000" onclick="txChoosePreset(1000)">1,000</button>
+          <button type="button" class="tx-preset" data-stake="5000" onclick="txChoosePreset(5000)">5,000</button>
+          <button type="button" class="tx-preset" data-stake="10000" onclick="txChoosePreset(10000)">10,000</button>
+          <button type="button" class="tx-preset" data-stake="50000" onclick="txChoosePreset(50000)">50,000</button>
+          <button type="button" class="tx-preset" data-stake="100000" onclick="txChoosePreset(100000)">100,000</button>
+          <button type="button" class="tx-preset" data-stake="250000" onclick="txChoosePreset(250000)">250,000</button>
         </div>
         <div class="tx-stat-grid" aria-label="Thống kê tiền cược phiên hiện tại">
           <div class="tx-stat-side"><div class="tx-stat-name">TÀI · TỔNG CƯỢC</div><strong id="txTaiStakeTotal">0</strong><div class="tx-stat-note">Nếu Tài thắng, trả <b id="txTaiPayout">0</b></div><div class="tx-stat-note">Lãi/lỗ nhà cái: <b id="txTaiNet">0</b></div></div>
@@ -574,6 +593,28 @@ function refresh() {
     if(!/^\d{1,3}(?:,\d{3})*$/.test(str) && !/^\d+$/.test(str))return NaN;
     return Number(str.replace(/,/g,''));
   }
+  // Chọn cửa đang thao tác; nút nhanh chỉ điền tiền, KHÔNG tự gửi cược.
+  let txActivePick='TAI';
+  function txChoosePreset(amount){
+    const el=document.getElementById(txActivePick==='XIU'?'txStakeXiu':'txStakeTai');
+    if(!el)return;
+    el.value=txFormatThousands(amount);
+    el.dispatchEvent(new Event('input',{bubbles:true}));
+    txUpdatePresetSelection();
+  }
+  function txUpdatePresetSelection(){
+    const input=document.getElementById(txActivePick==='XIU'?'txStakeXiu':'txStakeTai');
+    const current=input?txParseStake(input.value):NaN;
+    document.querySelectorAll('.tx-preset').forEach(b=>{
+      b.classList.toggle('active',Number(b.dataset.stake)===current);
+      b.disabled=Boolean(txDataCache && Number(b.dataset.stake)>Number(txDataCache.maxStake));
+    });
+  }
+  ['TAI','XIU'].forEach(pick=>{
+    const el=document.getElementById(pick==='TAI'?'txStakeTai':'txStakeXiu');
+    el.addEventListener('focus',()=>{txActivePick=pick;txUpdatePresetSelection();});
+    el.addEventListener('input',()=>{txActivePick=pick;txUpdatePresetSelection();});
+  });
   txBindMoneyInput('txStakeTai');
   txBindMoneyInput('txStakeXiu');
   function loadTaiXiu(){
@@ -582,6 +623,7 @@ function refresh() {
     const requestStart=Date.now();
     rpc('txData',[tg.initData]).then(d=>{
       txDataCache=d;
+      txUpdatePresetSelection();
       const t=Date.parse(d.serverTime);if(Number.isFinite(t))txServerOffset=t-(requestStart+Date.now())/2;
       document.getElementById('txBalance').textContent=txFmt(d.balance);
       const stats=d.roundTotals||{};
@@ -623,6 +665,7 @@ function refresh() {
     }).finally(()=>{txLoading=false;});
   }
   function txPlaceBet(pick){
+    txActivePick=pick;txUpdatePresetSelection();
     if(txSubmitting||!txDataCache||!txDataCache.current)return;
     const r=txDataCache.current;
     const stake=txParseStake(document.getElementById(pick==='TAI'?'txStakeTai':'txStakeXiu').value);
