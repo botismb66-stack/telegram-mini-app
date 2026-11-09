@@ -208,9 +208,9 @@
         <div class="tx-title">🐉 TÀI XỈU MB66</div>
         <div class="tx-top"><span>💰 <span id="txBalance">...</span></span><span>🎲 x1.95</span></div>
         <div class="tx-arena">
-          <div class="tx-side"><h3>TÀI</h3><input id="txStakeTai" type="text" inputmode="decimal" autocomplete="off" value="100" aria-label="Tiền cược Tài"><button class="txBetButton" onclick="txPlaceBet('TAI')">CƯỢC TÀI</button></div>
+          <div class="tx-side"><h3>TÀI</h3><input id="txStakeTai" type="text" inputmode="numeric" autocomplete="off" value="100" aria-label="Tiền cược Tài"><button class="txBetButton" onclick="txPlaceBet('TAI')">CƯỢC TÀI</button></div>
           <div class="tx-dial"><strong id="txCountdown">--</strong><small>GIÂY</small></div>
-          <div class="tx-side"><h3>XỈU</h3><input id="txStakeXiu" type="text" inputmode="decimal" autocomplete="off" value="100" aria-label="Tiền cược Xỉu"><button class="txBetButton" onclick="txPlaceBet('XIU')">CƯỢC XỈU</button></div>
+          <div class="tx-side"><h3>XỈU</h3><input id="txStakeXiu" type="text" inputmode="numeric" autocomplete="off" value="100" aria-label="Tiền cược Xỉu"><button class="txBetButton" onclick="txPlaceBet('XIU')">CƯỢC XỈU</button></div>
         </div>
         <div id="txDots" class="tx-bottom"></div>
         <div id="txRoundId" class="tx-sub" style="color:#ffe9ad;text-align:center">Đang tải phiên...</div>
@@ -524,12 +524,36 @@ function refresh() {
     const el=document.getElementById('txCountdown');if(el)el.textContent=r?String(left):'--';
     document.querySelectorAll('.txBetButton').forEach(b=>b.disabled=txSubmitting||!r||left===0);
   }
-  function txParseStake(raw){
-    const str=String(raw).trim().replace(/\s/g,'');
-    // Hỗ trợ 100.5 / 100,5, không đoán dấu phân cách hàng nghìn.
-    if(!/^\d+(?:[.,]\d{1,2})?$/.test(str))return NaN;
-    return Number(str.replace(',','.'));
+  // Dấu phẩy phân cách hàng nghìn: 1000 -> 1,000; không đổi giá trị.
+  function txFormatThousands(raw){
+    const digits=String(raw||'').replace(/\D/g,'').slice(0,14);
+    return digits ? digits.replace(/^0+(?=\d)/,'').replace(/\B(?=(\d{3})+(?!\d))/g,',') : '';
   }
+  function txBindMoneyInput(id){
+    const el=document.getElementById(id);
+    if(!el)return;
+    el.value='100';
+    el.addEventListener('input',()=>{
+      const old=el.value;
+      const pos=el.selectionStart == null ? old.length : el.selectionStart;
+      const digitsBefore=old.slice(0,pos).replace(/\D/g,'').length;
+      const formatted=txFormatThousands(old);
+      el.value=formatted;
+      let newPos=0, seen=0;
+      while(newPos<formatted.length && seen<digitsBefore){
+        if(/\d/.test(formatted[newPos]))seen++;
+        newPos++;
+      }
+      el.setSelectionRange(newPos,newPos);
+    });
+  }
+  function txParseStake(raw){
+    const str=String(raw).trim();
+    if(!/^\d{1,3}(?:,\d{3})*$/.test(str) && !/^\d+$/.test(str))return NaN;
+    return Number(str.replace(/,/g,''));
+  }
+  txBindMoneyInput('txStakeTai');
+  txBindMoneyInput('txStakeXiu');
   function loadTaiXiu(){
     if(!tg||!tg.initData||txLoading)return;
     txLoading=true;
@@ -559,7 +583,7 @@ function refresh() {
     if(txSubmitting||!txDataCache||!txDataCache.current)return;
     const r=txDataCache.current;
     const stake=txParseStake(document.getElementById(pick==='TAI'?'txStakeTai':'txStakeXiu').value);
-    if(!Number.isFinite(stake)||stake<txDataCache.minStake||stake>txDataCache.maxStake){notify('Số tiền cược không hợp lệ (tối đa 2 số thập phân).',true);return;}
+    if(!Number.isFinite(stake)||stake<txDataCache.minStake||stake>txDataCache.maxStake){notify('Số tiền cược không hợp lệ.',true);return;}
     if(Date.now()+txServerOffset>=Date.parse(r.closesAt)){notify('Phiên đã đóng.',true);return;}
     if(!confirm('Đặt '+txFmt(stake)+' vào cửa '+pick+' từ ví chính?'))return;
     txSubmitting=true;txTimeLeft();
