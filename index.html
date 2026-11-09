@@ -82,6 +82,20 @@
       main { padding: 12px 10px 30px; }
       .grid { grid-template-columns: 1fr; }
     }
+
+/* Tài/Xỉu: chỉ thay giao diện trò chơi */
+.tx-board{background:radial-gradient(ellipse at 50% 30%,#a82516,#580804 78%);border:3px solid #e7ac39;border-radius:30px;padding:15px 12px;color:#ffe9ad;box-shadow:inset 0 0 24px #2a0303,0 8px 22px #4d170733}
+.tx-title{text-align:center;font-weight:900;font-size:25px;color:#ffd46c;text-shadow:0 2px #5a1800;margin:2px 0 8px}
+.tx-top{display:flex;justify-content:space-between;align-items:center;gap:6px;border-bottom:1px solid #dba445;padding-bottom:9px;font-weight:bold}
+.tx-arena{display:grid;grid-template-columns:minmax(0,1fr) 110px minmax(0,1fr);gap:8px;align-items:center;margin-top:15px}
+.tx-side{text-align:center;min-width:0}.tx-side h3{font-size:clamp(24px,7vw,40px);margin:0 0 12px;color:#f9f9f9;text-shadow:2px 3px 1px #191919}
+.tx-side input{width:100%;min-width:0;background:#280a05;color:white;border:2px solid #e7a735;text-align:center;padding:10px 3px;font-size:17px;border-radius:18px}
+.tx-side button{width:100%;margin-top:9px;background:linear-gradient(#ffe4a2,#e89a20);color:#672b00;border:2px solid #fff1c3;border-radius:30px;padding:10px 3px;font-size:13px}
+.tx-dial{aspect-ratio:1;border-radius:50%;border:7px double #f2bd54;background:radial-gradient(circle,#fff,#e6eaf0);display:flex;flex-direction:column;align-items:center;justify-content:center;color:#e77512;box-shadow:0 0 0 3px #8a370d}
+.tx-dial strong{font-size:42px}.tx-dial small{font-size:10px;color:#824500}
+.tx-bottom{margin-top:16px;display:flex;gap:5px;flex-wrap:wrap;justify-content:center}.tx-dot{width:15px;height:15px;border-radius:50%;background:linear-gradient(#fff,#b9c5d0);border:1px solid #bbb}.tx-dot.tai{background:linear-gradient(#5b5b5b,#050505);border-color:#bbb}.tx-dot.triple{background:#e9a12d}
+.tx-commit{font-size:11px;overflow-wrap:anywhere;margin-top:12px;color:#f6dcb3}.tx-sub{font-size:12px;color:#7a6870;margin:9px 0}
+@media(max-width:380px){.tx-arena{grid-template-columns:minmax(0,1fr) 88px minmax(0,1fr);gap:5px}.tx-dial strong{font-size:34px}.tx-side input{font-size:14px}}
   </style>
 </head>
 <body>
@@ -190,12 +204,20 @@
     </section>
 
     <section id="games" class="section">
-      <div class="card"><h2>🎲 Tài / Xỉu</h2>
-        <p class="muted">Mỗi phiên 60 giây · Tỷ lệ 1.95 · Tài 11–17, Xỉu 4–10 · Bộ ba đồng số: cả hai cửa thua.</p>
-        <h2>Số dư ví chính: <span id="txBalance">...</span></h2>
-        <div id="txRound">Đang tải phiên...</div>
-        <button class="secondary" onclick="loadTaiXiu()">Làm mới phiên</button>
+      <div class="tx-board">
+        <div class="tx-title">🐉 TÀI XỈU MB66</div>
+        <div class="tx-top"><span>💰 <span id="txBalance">...</span></span><span>🎲 x1.95</span></div>
+        <div class="tx-arena">
+          <div class="tx-side"><h3>TÀI</h3><input id="txStakeTai" type="text" inputmode="decimal" autocomplete="off" value="100" aria-label="Tiền cược Tài"><button class="txBetButton" onclick="txPlaceBet('TAI')">CƯỢC TÀI</button></div>
+          <div class="tx-dial"><strong id="txCountdown">--</strong><small>GIÂY</small></div>
+          <div class="tx-side"><h3>XỈU</h3><input id="txStakeXiu" type="text" inputmode="decimal" autocomplete="off" value="100" aria-label="Tiền cược Xỉu"><button class="txBetButton" onclick="txPlaceBet('XIU')">CƯỢC XỈU</button></div>
+        </div>
+        <div id="txDots" class="tx-bottom"></div>
+        <div id="txRoundId" class="tx-sub" style="color:#ffe9ad;text-align:center">Đang tải phiên...</div>
+        <div class="tx-commit">SHA-256 cam kết: <span id="txCommit">...</span></div>
+        <button class="secondary full" onclick="loadTaiXiu()">Làm mới phiên</button>
       </div>
+      <p class="tx-sub">60 giây/phiên · Tài 11–17 · Xỉu 4–10 · Bộ ba đồng số: cả hai cửa thua · Nhập số thập phân tối đa 2 chữ số.</p>
       <div class="card"><h2>20 kết quả gần nhất</h2><div id="txRecent"></div></div>
       <div class="card"><h2>Lịch sử cược Tài/Xỉu</h2><div id="txHistory"></div></div>
     </section>
@@ -492,48 +514,65 @@ function refresh() {
   let txDataCache=null;
   let txServerOffset=0;
   let txCountdownTimer=null;
+  let txRefreshTimer=null;
+  let txLoading=false;
+  let txSubmitting=false;
   function txFmt(n){return Number(n||0).toLocaleString('vi-VN',{maximumFractionDigits:2});}
   function txTimeLeft(){
-    if(!txDataCache||!txDataCache.current)return;
-    const left=Math.max(0,Math.ceil((Date.parse(txDataCache.current.closesAt)-(Date.now()+txServerOffset))/1000));
-    const el=document.getElementById('txCountdown');if(el)el.textContent=left+' giây';
-    const bet=document.getElementById('txPlaceBet');if(bet)bet.disabled=left===0;
+    const r=txDataCache&&txDataCache.current;
+    const left=r?Math.max(0,Math.ceil((Date.parse(r.closesAt)-(Date.now()+txServerOffset))/1000)):0;
+    const el=document.getElementById('txCountdown');if(el)el.textContent=r?String(left):'--';
+    document.querySelectorAll('.txBetButton').forEach(b=>b.disabled=txSubmitting||!r||left===0);
+  }
+  function txParseStake(raw){
+    const str=String(raw).trim().replace(/\s/g,'');
+    // Hỗ trợ 100.5 / 100,5, không đoán dấu phân cách hàng nghìn.
+    if(!/^\d+(?:[.,]\d{1,2})?$/.test(str))return NaN;
+    return Number(str.replace(',','.'));
   }
   function loadTaiXiu(){
-    if(!tg||!tg.initData)return;
+    if(!tg||!tg.initData||txLoading)return;
+    txLoading=true;
     rpc('txData',[tg.initData]).then(d=>{
-      txDataCache=d;txServerOffset=Date.parse(d.serverTime)-Date.now();
+      txDataCache=d;
+      const t=Date.parse(d.serverTime);if(Number.isFinite(t))txServerOffset=t-Date.now();
       document.getElementById('txBalance').textContent=txFmt(d.balance);
       const r=d.current;
-      document.getElementById('txRound').innerHTML=r?
-        '<div class="item"><strong>Phiên '+escapeHtml(r.id)+'</strong><p>Còn lại: <strong id="txCountdown">...</strong></p>'+
-        '<p class="muted small">SHA-256 cam kết: '+escapeHtml(r.commit)+'</p>'+
-        '<label>Chọn cửa</label><select id="txPick"><option value="TAI">TÀI (11–17)</option><option value="XIU">XỈU (4–10)</option></select>'+
-        '<label>Số tiền cược</label><input id="txStake" type="number" min="'+d.minStake+'" max="'+d.maxStake+'" step="1" value="100">'+
-        '<button id="txPlaceBet" class="primary full" onclick="txPlaceBet()">Đặt cược · x1.95</button></div>':
-        '<p class="muted">Đang chờ phiên mới. Nhấn Làm mới phiên.</p>';
-      document.getElementById('txRecent').innerHTML=(d.recent||[]).map(x=>
+      document.getElementById('txRoundId').textContent=r?'Phiên '+r.id:'Đang chờ phiên mới';
+      document.getElementById('txCommit').textContent=r?r.commit:'--';
+      // Không thay thế DOM của ô nhập, giữ nguyên số và vị trí con trỏ.
+      const recent=d.recent||[];
+      document.getElementById('txDots').innerHTML=recent.slice(0,15).reverse().map(x=>
+        '<span title="'+escapeHtml(x.id)+' · '+escapeHtml(x.result)+'" class="tx-dot '+(x.result==='TAI'?'tai':x.result==='TRIPLE'?'triple':'')+'"></span>').join('');
+      document.getElementById('txRecent').innerHTML=recent.map(x=>
         '<div class="item"><strong>'+escapeHtml(x.id)+'</strong> · '+escapeHtml(x.result)+
-        ' · '+(x.dice||[]).join(' - ')+' = '+x.total+
+        ' · '+(x.dice||[]).map(escapeHtml).join(' - ')+' = '+escapeHtml(x.total)+
         '<p><button class="secondary" onclick="txVerifyRound('+JSON.stringify(x.id).replace(/"/g,'&quot;')+')">Kiểm chứng kết quả</button></p></div>').join('')||'<p class="muted">Chưa có kết quả.</p>';
       document.getElementById('txHistory').innerHTML=(d.history||[]).map(x=>
         '<div class="item">'+escapeHtml(x.roundId)+' · '+escapeHtml(x.pick)+' · '+txFmt(x.stake)+
         ' · '+escapeHtml(x.status)+' · Nhận '+txFmt(x.payout)+'</div>').join('')||'<p class="muted">Chưa có cược.</p>';
-      if(d.isAdmin)txAdminStats();
-      if(txCountdownTimer)clearInterval(txCountdownTimer);
-      txTimeLeft();txCountdownTimer=setInterval(txTimeLeft,1000);
-    }).catch(e=>notify(e.message,true));
+      if(d.isAdmin&&document.getElementById('admin').classList.contains('active'))txAdminStats();
+      txTimeLeft();
+    }).catch(e=>notify(e.message,true)).finally(()=>{txLoading=false;});
   }
-  function txPlaceBet(){
-    if(!txDataCache||!txDataCache.current)return;
+  function txPlaceBet(pick){
+    if(txSubmitting||!txDataCache||!txDataCache.current)return;
     const r=txDataCache.current;
-    const stake=Number(document.getElementById('txStake').value);
-    const pick=document.getElementById('txPick').value;
-    if(!Number.isSafeInteger(stake)||stake<txDataCache.minStake||stake>txDataCache.maxStake){notify('Số tiền cược không hợp lệ.',true);return;}
+    const stake=txParseStake(document.getElementById(pick==='TAI'?'txStakeTai':'txStakeXiu').value);
+    if(!Number.isFinite(stake)||stake<txDataCache.minStake||stake>txDataCache.maxStake){notify('Số tiền cược không hợp lệ (tối đa 2 số thập phân).',true);return;}
     if(Date.now()+txServerOffset>=Date.parse(r.closesAt)){notify('Phiên đã đóng.',true);return;}
     if(!confirm('Đặt '+txFmt(stake)+' vào cửa '+pick+' từ ví chính?'))return;
-    callServer('txBet',[tg.initData,r.id,pick,stake],result=>{notify(result.message,false);loadTaiXiu();refresh();});
+    txSubmitting=true;txTimeLeft();
+    rpc('txBet',[tg.initData,r.id,pick,stake]).then(result=>{
+      notify(result.message||'Đã ghi nhận cược.',false);
+      loadTaiXiu();
+      // Không gọi refresh() vì refresh() có thể làm mới dữ liệu form khác.
+    }).catch(e=>notify(e.message,true)).finally(()=>{txSubmitting=false;txTimeLeft();});
   }
+  txCountdownTimer=setInterval(txTimeLeft,1000);
+  txRefreshTimer=setInterval(()=>{
+    if(document.getElementById('games').classList.contains('active')&&!txSubmitting)loadTaiXiu();
+  },12000);
   function txVerifyRound(id){
     callServer('txVerify',[tg.initData,id],result=>{
       notify(result.valid?'Kết quả hợp lệ · '+result.dice.join('-')+' = '+result.total:'CẢNH BÁO: Kết quả kiểm chứng không khớp!',!result.valid);
