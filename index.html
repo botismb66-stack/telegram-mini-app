@@ -129,10 +129,10 @@
   <div id="message" class="message"></div>
 
 <section id="publicHome" class="public-home" style="display:none">
- <div class="hero"><div class="eyebrow">MB66 · WEBSITE & MINI APP</div><h2>Chào mừng đến MB66</h2><p>Khám phá trò chơi, quản lý tài khoản và truy cập ví chung với Telegram Mini App.</p>
+ <div class="hero"><div class="eyebrow">MB66 · WEBSITE & MINI APP</div><h2>Chào mừng đến MB66</h2><p>Khám phá trò chơi và quản lý ví MB66 riêng. Telegram là liên kết tùy chọn.</p>
  <div class="hero-actions"><button onclick="openAuth('login')">Đăng nhập</button><button class="secondary" onclick="openAuth('register')">Đăng ký</button></div></div>
- <div class="features"><div>🎮<strong>Trò chơi</strong><span>Xem danh mục trò chơi</span></div><div>💳<strong>Ví chung</strong><span>Liên kết tài khoản Telegram</span></div><div>🧾<strong>Lịch sử</strong><span>Theo dõi giao dịch</span></div></div>
- <p class="muted small">Bạn có thể xem trang chủ mà không cần đăng nhập. Các tính năng ví yêu cầu xác thực và liên kết Telegram.</p>
+ <div class="features"><div>🎮<strong>Trò chơi</strong><span>Xem danh mục trò chơi</span></div><div>💳<strong>Ví MB66</strong><span>Tự tạo khi đăng ký</span></div><div>🧾<strong>Lịch sử</strong><span>Theo dõi giao dịch</span></div></div>
+ <p class="muted small">Bạn có thể xem trang chủ mà không cần đăng nhập. Tài khoản website có ví riêng số dư ban đầu 0 ₫. Liên kết Telegram là tùy chọn; ví Mini App cũ được giữ nguyên, chưa tự động gộp số dư.</p>
 </section>
 <section id="passwordPanel" class="card" style="display:none">
  <h2 id="authTitle">Đăng nhập MB66</h2>
@@ -147,11 +147,19 @@
 </section>
 
   <div id="webLogin" class="card" style="display:none;text-align:center">
-    <h2 id="telegramTitle">Liên kết Telegram với tài khoản MB66</h2>
-    <p class="muted" id="telegramDescription">Xác thực Telegram để liên kết đúng ví với tài khoản website của bạn.</p>
+    <h2 id="telegramTitle">Liên kết Telegram (không bắt buộc)</h2>
+    <p class="muted" id="telegramDescription">Liên kết để xác minh tài khoản Telegram. Ví Telegram cũ vẫn tách biệt, không tự động gộp số dư.</p>
     <div id="telegramLoginWidget"></div>
     <p class="muted small">Chỉ xác thực qua Telegram chính thức, không nhập mật khẩu Telegram tại đây.</p><button class="secondary" onclick="goHome()">Trang chủ</button>
   </div>
+<section id="websiteWallet" class="card" style="display:none">
+  <h2>Ví MB66 của bạn</h2>
+  <div class="balance"><div>SỐ DƯ VÍ WEBSITE</div><div class="amount" id="siteWalletBalance">0 ₫</div><div class="small">Mã ví: <strong id="siteWalletId"></strong></div></div>
+  <p class="muted small">Ví website được tạo tự động khi đăng ký. Ví Telegram Mini App cũ vẫn được giữ nguyên và chưa gộp số dư. Nạp, rút và đặt cược trên ví website chưa được kích hoạt.</p>
+  <div id="siteTelegramStatus" class="muted small"></div>
+  <button class="secondary" id="linkTelegramButton" onclick="showWebLogin()">Liên kết Telegram (tùy chọn)</button>
+  <button class="secondary" onclick="webLogout()">Đăng xuất</button>
+</section>
   <div id="webAccount" class="card" style="display:none;text-align:right"><span id="webUserLabel"></span> <button class="secondary" onclick="webLogout()">Đăng xuất</button></div>
   <div id="loading" class="card">Đang kết nối...</div><button id="retry" class="secondary full" style="display:none" onclick="refresh()">Thử kết nối lại</button>
   <div id="app" style="display:none">
@@ -361,7 +369,7 @@
     updateAuthButton();
   }
   function showHome(){
-    ['publicHome','passwordPanel','webLogin','app','webAccount','loading','retry'].forEach(id=>document.getElementById(id).style.display='none');
+    ['publicHome','passwordPanel','webLogin','app','webAccount','websiteWallet','loading','retry'].forEach(id=>document.getElementById(id).style.display='none');
     document.getElementById('publicHome').style.display='block';
   }
   function goHome(){if(inTelegram){refresh();return;}if(webToken){webLogout();return;}showHome();}
@@ -374,7 +382,7 @@
     document.getElementById('passwordPanel').style.display='block';
     document.getElementById('authTitle').textContent=mode==='register'?'Đăng ký tài khoản MB66':'Đăng nhập MB66';
     document.getElementById('passwordSubmit').textContent=mode==='register'?'Tạo tài khoản':'Đăng nhập';
-    document.getElementById('passwordHint').textContent=mode==='register'?'Sau khi đăng ký, xác thực Telegram để liên kết ví dùng chung.':'Dùng tài khoản website hoặc đăng nhập nhanh bằng Telegram.';
+    document.getElementById('passwordHint').textContent=mode==='register'?'Đăng ký thành công sẽ tự động tạo ví MB66 số dư 0 ₫. Telegram không bắt buộc.':'Dùng tài khoản website hoặc đăng nhập nhanh bằng Telegram.';
     loadTelegramWidget('telegramWidgetPassword');
   }
   async function submitPassword(){
@@ -399,9 +407,9 @@
       }
       webToken=result.token;sessionStorage.setItem('mb66_web_session',webToken);
       document.getElementById('sitePassword').value='';
-      authFeedback(authMode==='register'?'Tạo tài khoản thành công. Đang chuyển sang liên kết Telegram…':'Đăng nhập thành công. Đang mở tài khoản…','success');
+      authFeedback(authMode==='register'?'Đã tạo tài khoản và ví MB66 thành công.':'Đăng nhập thành công.','success');
       document.getElementById('passwordPanel').style.display='none';
-      if(!result.linked){showWebLogin();notify('Xác thực Telegram để liên kết ví với tài khoản website.',false);}else refresh();
+      if(result.accountId){showWebsiteWallet(result.wallet, result.linked);}else refresh();
     }catch(e){authFeedback(e.message||'Không thể kết nối máy chủ. Vui lòng kiểm tra mạng và thử lại.','error');}
     finally{authPending=false;updateAuthButton();}
   }
@@ -414,8 +422,16 @@
     script.setAttribute('data-onauth','onTelegramWebAuth(user)');
     slot.appendChild(script);
   }
+  function showWebsiteWallet(wallet,linked){
+    ['publicHome','passwordPanel','webLogin','app','webAccount','websiteWallet','loading','retry'].forEach(id=>document.getElementById(id).style.display='none');
+    document.getElementById('websiteWallet').style.display='block';
+    document.getElementById('siteWalletId').textContent=wallet?.wallet_id||'Đang tải';
+    document.getElementById('siteWalletBalance').textContent=Number(wallet?.balance||0).toLocaleString('vi-VN')+' ₫';
+    document.getElementById('siteTelegramStatus').textContent=linked?'Đã liên kết Telegram. Ví Mini App cũ vẫn tách biệt.':'Chưa liên kết Telegram (không bắt buộc).';
+    document.getElementById('linkTelegramButton').style.display=linked?'none':'inline-block';
+  }
   function showWebLogin(){
-    ['publicHome','passwordPanel','loading','app','webAccount'].forEach(id=>document.getElementById(id).style.display='none');
+    ['publicHome','passwordPanel','loading','app','webAccount','websiteWallet'].forEach(id=>document.getElementById(id).style.display='none');
     document.getElementById('webLogin').style.display='block';
     loadTelegramWidget('telegramLoginWidget');
   }
@@ -424,7 +440,7 @@
       const response=await fetch(API_BASE+'/auth/telegram',{method:'POST',headers:{'Content-Type':'application/json',...webHeaders()},body:JSON.stringify(user)});
       const result=await response.json();if(!response.ok||!result.ok)throw Error(result.error||'Đăng nhập thất bại');
       webToken=result.token;sessionStorage.setItem('mb66_web_session',webToken);
-      document.getElementById('webLogin').style.display='none';document.getElementById('passwordPanel').style.display='none';refresh();
+      document.getElementById('webLogin').style.display='none';document.getElementById('passwordPanel').style.display='none';if(result.accountId){showWebsiteWallet(result.wallet,true);}else refresh();
     }catch(e){notify(e.message,true);}
   };
   async function webLogout(){
@@ -435,7 +451,7 @@
     if(!webToken){showHome();return;}
     try{const response=await fetch(API_BASE+'/auth/session',{method:'POST',headers:{...webHeaders()}});const s=await response.json();
       if(!response.ok||!s.ok){webToken='';sessionStorage.removeItem('mb66_web_session');showHome();return;}
-      if(!s.linked){showWebLogin();return;}refresh();
+      if(s.accountId){showWebsiteWallet(s.wallet,s.linked);return;}refresh();
     }catch(e){notify('Không thể xác minh phiên đăng nhập: '+e.message,true);showHome();}
   }
   let dashboard = null;
