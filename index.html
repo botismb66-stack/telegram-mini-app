@@ -140,6 +140,7 @@
  <label>Mật khẩu <input id="sitePassword" type="password" autocomplete="current-password" placeholder="Tối thiểu 12 ký tự khi đăng ký" /></label>
  <p id="passwordHint" class="muted small"></p>
  <button id="passwordSubmit" class="full" onclick="submitPassword()">Đăng nhập</button>
+ <div id="authFeedback" role="status" aria-live="polite" style="display:none;margin-top:10px;padding:12px;border-radius:9px"></div>
  <p class="muted small">Hoặc đăng nhập bằng Telegram:</p>
  <div id="telegramWidgetPassword"></div>
  <p><button class="secondary" onclick="goHome()">← Quay lại trang chủ</button></p>
@@ -336,6 +337,29 @@
   function authData(){ return inTelegram ? tg.initData : 'WEB_SESSION'; }
   function webHeaders(){return !inTelegram && webToken ? {'Authorization':'Bearer '+webToken} : {};}
   let authMode='login';
+  let authPending=false;
+  let authCooldownUntil=0;
+  let authCountdownTimer=null;
+  function authFeedback(message,kind){
+    const el=document.getElementById('authFeedback');
+    el.textContent=message;el.style.display='block';
+    el.style.background=kind==='error'?'#ffe7e9':kind==='success'?'#e0f5e9':'#fff4d5';
+    el.style.color=kind==='error'?'#a62b3a':kind==='success'?'#126c48':'#775600';
+  }
+  function updateAuthButton(){
+    const b=document.getElementById('passwordSubmit');
+    const remaining=Math.max(0,Math.ceil((authCooldownUntil-Date.now())/1000));
+    b.disabled=authPending||remaining>0;
+    b.textContent=authPending?'Đang xử lý…':remaining>0?'Thử lại sau '+Math.ceil(remaining/60)+' phút':authMode==='register'?'Tạo tài khoản':'Đăng nhập';
+    if(remaining>0)authFeedback('Bạn đã thử quá nhiều lần. Vui lòng chờ '+Math.floor(remaining/60)+' phút '+String(remaining%60).padStart(2,'0')+' giây rồi thử lại.','error');
+    if(remaining===0&&authCountdownTimer){clearInterval(authCountdownTimer);authCountdownTimer=null;authFeedback('Đã hết thời gian chờ. Bạn có thể thử lại một lần.','info');}
+  }
+  function startAuthCooldown(seconds){
+    authCooldownUntil=Date.now()+Math.max(1,seconds)*1000;
+    if(authCountdownTimer)clearInterval(authCountdownTimer);
+    authCountdownTimer=setInterval(updateAuthButton,1000);
+    updateAuthButton();
+  }
   function showHome(){
     ['publicHome','passwordPanel','webLogin','app','webAccount','loading','retry'].forEach(id=>document.getElementById(id).style.display='none');
     document.getElementById('publicHome').style.display='block';
@@ -343,6 +367,8 @@
   function goHome(){if(inTelegram){refresh();return;}if(webToken){webLogout();return;}showHome();}
   function openAuth(mode){
     authMode=mode;
+    document.getElementById('authFeedback').style.display='none';
+    updateAuthButton();
     document.getElementById('publicHome').style.display='none';
     document.getElementById('webLogin').style.display='none';
     document.getElementById('passwordPanel').style.display='block';
@@ -352,17 +378,32 @@
     loadTelegramWidget('telegramWidgetPassword');
   }
   async function submitPassword(){
+    if(authPending||Date.now()<authCooldownUntil)return;
     const username=document.getElementById('siteUsername').value.trim();
     const password=document.getElementById('sitePassword').value;
-    const button=document.getElementById('passwordSubmit');button.disabled=true;
+    if(!/^[a-z][a-z0-9_]{3,23}$/.test(username.toLowerCase())){authFeedback('Tên đăng nhập phải có 4–24 ký tự, bắt đầu bằng chữ và chỉ gồm chữ thường, số hoặc _.','error');return;}
+    if(authMode==='register'&&(password.length<12||password.length>128)){authFeedback('Mật khẩu đăng ký phải có 12–128 ký tự.','error');return;}
+    if(!password){authFeedback('Vui lòng nhập mật khẩu.','error');return;}
+    authPending=true;updateAuthButton();authFeedback('Đang xử lý yêu cầu, vui lòng không bấm nhiều lần…','info');
     try{
       const response=await fetch(API_BASE+(authMode==='register'?'/auth/register':'/auth/password'),{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({username,password})});
-      const result=await response.json();if(!response.ok||!result.ok)throw Error(result.error||'Không thể xác thực');
+      let result;try{result=await response.json();}catch{throw Error('Máy chủ trả về dữ liệu không hợp lệ (HTTP '+response.status+').');}
+      if(!response.ok||!result.ok){
+        const message=String(result.error||'Không thể xác thực (HTTP '+response.status+').');
+        if(response.status===429||/quá nhiều lần|10 phút|thử lại sau/i.test(message)){
+          const retry=Number(response.headers.get('Retry-After'));
+          startAuthCooldown(Number.isFinite(retry)&&retry>0?retry:600);
+          return;
+        }
+        throw Error(message);
+      }
       webToken=result.token;sessionStorage.setItem('mb66_web_session',webToken);
       document.getElementById('sitePassword').value='';
+      authFeedback(authMode==='register'?'Tạo tài khoản thành công. Đang chuyển sang liên kết Telegram…':'Đăng nhập thành công. Đang mở tài khoản…','success');
       document.getElementById('passwordPanel').style.display='none';
       if(!result.linked){showWebLogin();notify('Xác thực Telegram để liên kết ví với tài khoản website.',false);}else refresh();
-    }catch(e){notify(e.message,true);}finally{button.disabled=false;}
+    }catch(e){authFeedback(e.message||'Không thể kết nối máy chủ. Vui lòng kiểm tra mạng và thử lại.','error');}
+    finally{authPending=false;updateAuthButton();}
   }
   function loadTelegramWidget(slotId){
     const slot=document.getElementById(slotId);if(slot.dataset.loaded)return;
