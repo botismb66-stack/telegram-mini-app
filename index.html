@@ -114,21 +114,42 @@
 .tx-preset.active{background:linear-gradient(180deg,#ffe7a6,#e6a32f);color:#552300;border-color:#fff3c4}
 .tx-preset:disabled{opacity:.4;cursor:not-allowed}
 .tx-preset-help{text-align:center;color:#ffdfad;font-size:11px;margin:6px 0 3px}
+
+.public-home{margin-top:14px}.hero{padding:30px 22px;background:linear-gradient(135deg,#152138,#273b58);border-radius:18px;color:#fff}.hero .eyebrow{font-size:11px;letter-spacing:2px;color:#ffdb67;font-weight:800}.hero h2{font-size:29px;margin:16px 0 10px;color:#ffdf79}.hero p{line-height:1.7;color:#d9e3f2}.hero-actions{display:flex;gap:10px;margin-top:22px}.hero-actions button{flex:1;background:#cf3729;color:white;border:0}.hero-actions .secondary{background:#fff0b4;color:#4d2700}.features{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin:14px 0}.features>div{display:flex;flex-direction:column;gap:8px;background:white;border:1px solid #e8e9ee;border-radius:14px;padding:16px 9px;text-align:center;font-size:23px}.features strong{font-size:13px}.features span{font-size:11px;color:#6c7485;line-height:1.4}#passwordPanel label{display:block;margin:12px 0;font-weight:600}#passwordPanel input{display:block;width:100%;padding:12px;border:1px solid #d5d9e2;border-radius:9px;margin-top:7px;font-size:15px}#telegramWidgetPassword{margin:14px 0}#webLogin{text-align:center}@media(max-width:420px){.hero h2{font-size:24px}.features{gap:6px}.features>div{padding:13px 5px}}
+
   </style>
 </head>
 <body>
 <main>
   <header>
-    <h1>Mini App</h1>
-    <div class="muted">Không gian tài khoản của bạn</div>
+    <h1>MB66</h1>
+    <div class="muted">Website · Tài khoản · Mini App</div>
   </header>
 
   <div id="message" class="message"></div>
+
+<section id="publicHome" class="public-home" style="display:none">
+ <div class="hero"><div class="eyebrow">MB66 · WEBSITE & MINI APP</div><h2>Chào mừng đến MB66</h2><p>Khám phá trò chơi, quản lý tài khoản và truy cập ví chung với Telegram Mini App.</p>
+ <div class="hero-actions"><button onclick="openAuth('login')">Đăng nhập</button><button class="secondary" onclick="openAuth('register')">Đăng ký</button></div></div>
+ <div class="features"><div>🎮<strong>Trò chơi</strong><span>Xem danh mục trò chơi</span></div><div>💳<strong>Ví chung</strong><span>Liên kết tài khoản Telegram</span></div><div>🧾<strong>Lịch sử</strong><span>Theo dõi giao dịch</span></div></div>
+ <p class="muted small">Bạn có thể xem trang chủ mà không cần đăng nhập. Các tính năng ví yêu cầu xác thực và liên kết Telegram.</p>
+</section>
+<section id="passwordPanel" class="card" style="display:none">
+ <h2 id="authTitle">Đăng nhập MB66</h2>
+ <label>Tên đăng nhập <input id="siteUsername" autocomplete="username" maxlength="24" placeholder="Ví dụ: mb66_user" /></label>
+ <label>Mật khẩu <input id="sitePassword" type="password" autocomplete="current-password" placeholder="Tối thiểu 12 ký tự khi đăng ký" /></label>
+ <p id="passwordHint" class="muted small"></p>
+ <button id="passwordSubmit" class="full" onclick="submitPassword()">Đăng nhập</button>
+ <p class="muted small">Hoặc đăng nhập bằng Telegram:</p>
+ <div id="telegramWidgetPassword"></div>
+ <p><button class="secondary" onclick="goHome()">← Quay lại trang chủ</button></p>
+</section>
+
   <div id="webLogin" class="card" style="display:none;text-align:center">
-    <h2>Đăng nhập MB66 bằng Telegram</h2>
-    <p class="muted">Dùng tài khoản Telegram đang sử dụng trong Mini App để truy cập chung ví.</p>
+    <h2 id="telegramTitle">Liên kết Telegram với tài khoản MB66</h2>
+    <p class="muted" id="telegramDescription">Xác thực Telegram để liên kết đúng ví với tài khoản website của bạn.</p>
     <div id="telegramLoginWidget"></div>
-    <p class="muted small">Không nhập mật khẩu Telegram trên website MB66.</p>
+    <p class="muted small">Chỉ xác thực qua Telegram chính thức, không nhập mật khẩu Telegram tại đây.</p><button class="secondary" onclick="goHome()">Trang chủ</button>
   </div>
   <div id="webAccount" class="card" style="display:none;text-align:right"><span id="webUserLabel"></span> <button class="secondary" onclick="webLogout()">Đăng xuất</button></div>
   <div id="loading" class="card">Đang kết nối...</div><button id="retry" class="secondary full" style="display:none" onclick="refresh()">Thử kết nối lại</button>
@@ -314,34 +335,67 @@
   let webToken = sessionStorage.getItem('mb66_web_session') || '';
   function authData(){ return inTelegram ? tg.initData : 'WEB_SESSION'; }
   function webHeaders(){return !inTelegram && webToken ? {'Authorization':'Bearer '+webToken} : {};}
-  function showWebLogin(){
-    document.getElementById('loading').style.display='none';
-    document.getElementById('app').style.display='none';
-    document.getElementById('webAccount').style.display='none';
-    document.getElementById('webLogin').style.display='block';
-    const slot=document.getElementById('telegramLoginWidget');
-    if(slot.dataset.loaded)return;
-    slot.dataset.loaded='1';
-    const script=document.createElement('script');
+  let authMode='login';
+  function showHome(){
+    ['publicHome','passwordPanel','webLogin','app','webAccount','loading','retry'].forEach(id=>document.getElementById(id).style.display='none');
+    document.getElementById('publicHome').style.display='block';
+  }
+  function goHome(){if(inTelegram){refresh();return;}if(webToken){webLogout();return;}showHome();}
+  function openAuth(mode){
+    authMode=mode;
+    document.getElementById('publicHome').style.display='none';
+    document.getElementById('webLogin').style.display='none';
+    document.getElementById('passwordPanel').style.display='block';
+    document.getElementById('authTitle').textContent=mode==='register'?'Đăng ký tài khoản MB66':'Đăng nhập MB66';
+    document.getElementById('passwordSubmit').textContent=mode==='register'?'Tạo tài khoản':'Đăng nhập';
+    document.getElementById('passwordHint').textContent=mode==='register'?'Sau khi đăng ký, xác thực Telegram để liên kết ví dùng chung.':'Dùng tài khoản website hoặc đăng nhập nhanh bằng Telegram.';
+    loadTelegramWidget('telegramWidgetPassword');
+  }
+  async function submitPassword(){
+    const username=document.getElementById('siteUsername').value.trim();
+    const password=document.getElementById('sitePassword').value;
+    const button=document.getElementById('passwordSubmit');button.disabled=true;
+    try{
+      const response=await fetch(API_BASE+(authMode==='register'?'/auth/register':'/auth/password'),{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({username,password})});
+      const result=await response.json();if(!response.ok||!result.ok)throw Error(result.error||'Không thể xác thực');
+      webToken=result.token;sessionStorage.setItem('mb66_web_session',webToken);
+      document.getElementById('sitePassword').value='';
+      document.getElementById('passwordPanel').style.display='none';
+      if(!result.linked){showWebLogin();notify('Xác thực Telegram để liên kết ví với tài khoản website.',false);}else refresh();
+    }catch(e){notify(e.message,true);}finally{button.disabled=false;}
+  }
+  function loadTelegramWidget(slotId){
+    const slot=document.getElementById(slotId);if(slot.dataset.loaded)return;
+    slot.dataset.loaded='1';const script=document.createElement('script');
     script.async=true;script.src='https://telegram.org/js/telegram-widget.js?22';
     script.setAttribute('data-telegram-login',WEB_BOT_USERNAME);
-    script.setAttribute('data-size','large');
-    script.setAttribute('data-radius','8');
+    script.setAttribute('data-size','large');script.setAttribute('data-radius','8');
     script.setAttribute('data-onauth','onTelegramWebAuth(user)');
-    script.setAttribute('data-request-access','write');
     slot.appendChild(script);
+  }
+  function showWebLogin(){
+    ['publicHome','passwordPanel','loading','app','webAccount'].forEach(id=>document.getElementById(id).style.display='none');
+    document.getElementById('webLogin').style.display='block';
+    loadTelegramWidget('telegramLoginWidget');
   }
   window.onTelegramWebAuth=async function(user){
     try{
-      const response=await fetch(API_BASE+'/auth/telegram',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(user)});
+      const response=await fetch(API_BASE+'/auth/telegram',{method:'POST',headers:{'Content-Type':'application/json',...webHeaders()},body:JSON.stringify(user)});
       const result=await response.json();if(!response.ok||!result.ok)throw Error(result.error||'Đăng nhập thất bại');
       webToken=result.token;sessionStorage.setItem('mb66_web_session',webToken);
-      document.getElementById('webLogin').style.display='none';refresh();
+      document.getElementById('webLogin').style.display='none';document.getElementById('passwordPanel').style.display='none';refresh();
     }catch(e){notify(e.message,true);}
   };
   async function webLogout(){
     try{await fetch(API_BASE+'/auth/logout',{method:'POST',headers:{...webHeaders()}});}catch(_){}
-    webToken='';sessionStorage.removeItem('mb66_web_session');showWebLogin();
+    webToken='';sessionStorage.removeItem('mb66_web_session');showHome();
+  }
+  async function resumeWeb(){
+    if(!webToken){showHome();return;}
+    try{const response=await fetch(API_BASE+'/auth/session',{method:'POST',headers:{...webHeaders()}});const s=await response.json();
+      if(!response.ok||!s.ok){webToken='';sessionStorage.removeItem('mb66_web_session');showHome();return;}
+      if(!s.linked){showWebLogin();return;}refresh();
+    }catch(e){notify('Không thể xác minh phiên đăng nhập: '+e.message,true);showHome();}
   }
   let dashboard = null;
   let busy = false;
@@ -401,7 +455,7 @@ async function rpc(method, args) {
     } catch (_) {
       throw new Error('Worker không trả về JSON hợp lệ (HTTP ' + response.status + ').');
     }
-    if (response.status===401 && !inTelegram && webToken) { webToken='';sessionStorage.removeItem('mb66_web_session');showWebLogin(); }
+    if (response.status===401 && !inTelegram && webToken) { webToken='';sessionStorage.removeItem('mb66_web_session');showHome(); }
     if (!response.ok || !data || data.ok !== true) {
       throw new Error((data && data.error) || 'API lỗi HTTP ' + response.status);
     }
@@ -555,12 +609,12 @@ function callServer(method, args, onSuccess, onFailure) {
 function refresh() {
   const loading = document.getElementById('loading');
 
-  if (!inTelegram && !webToken) { showWebLogin(); return; }
+  if (!inTelegram && !webToken) { showHome(); return; }
   if (inTelegram) { tg.ready(); tg.expand(); }
   if (!inTelegram) {
     document.getElementById('webLogin').style.display='none';
     document.getElementById('webAccount').style.display='block';
-    document.getElementById('webUserLabel').textContent='Đăng nhập bằng Telegram';
+    document.getElementById('webUserLabel').textContent='Tài khoản MB66';
   }
   loading.style.display='block';
 
@@ -843,7 +897,7 @@ function refresh() {
 
 
   // Khởi chạy ứng dụng sau khi các hàm đã được khai báo.
-  try { refresh(); }
+  try { if(inTelegram)refresh();else resumeWeb(); }
   catch (error) {
     document.getElementById('loading').textContent = error.message;
     document.getElementById('retry').style.display = 'block';
