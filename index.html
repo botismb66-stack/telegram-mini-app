@@ -155,7 +155,7 @@
 <section id="websiteWallet" class="card" style="display:none">
   <h2>Ví MB66 của bạn</h2>
   <div class="balance"><div>SỐ DƯ VÍ WEBSITE</div><div class="amount" id="siteWalletBalance">0 ₫</div><div class="small">Mã ví: <strong id="siteWalletId"></strong></div></div>
-  <p class="muted small">Ví website được tạo tự động khi đăng ký. Ví Telegram Mini App cũ vẫn được giữ nguyên và chưa gộp số dư. Nạp, rút và đặt cược trên ví website chưa được kích hoạt.</p>
+  <p class="muted small">Ví website được tạo tự động khi đăng ký. V4 đã hỗ trợ liên kết đăng nhập, nhưng số dư Mini App cũ vẫn được giữ nguyên và chưa gộp. Nạp, rút và đặt cược trên ví website chưa được kích hoạt.</p>
   <div id="siteTelegramStatus" class="muted small"></div>
   <button class="secondary" id="linkTelegramButton" onclick="showWebLogin()">Liên kết Telegram (tùy chọn)</button>
   <button class="secondary" onclick="webLogout()">Đăng xuất</button>
@@ -393,13 +393,15 @@
     if(authMode==='register'&&(password.length<12||password.length>128)){authFeedback('Mật khẩu đăng ký phải có 12–128 ký tự.','error');return;}
     if(!password){authFeedback('Vui lòng nhập mật khẩu.','error');return;}
     authPending=true;updateAuthButton();authFeedback('Đang xử lý yêu cầu, vui lòng không bấm nhiều lần…','info');
+    const controller=new AbortController();
+    const timeout=setTimeout(()=>controller.abort(),25000);
     try{
-      const response=await fetch(API_BASE+(authMode==='register'?'/auth/register':'/auth/password'),{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({username,password})});
+      const response=await fetch(API_BASE+(authMode==='register'?'/auth/register':'/auth/password'),{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({username,password}),signal:controller.signal});
       let result;try{result=await response.json();}catch{throw Error('Máy chủ trả về dữ liệu không hợp lệ (HTTP '+response.status+').');}
       if(!response.ok||!result.ok){
         const message=String(result.error||'Không thể xác thực (HTTP '+response.status+').');
         if(response.status===429||/quá nhiều lần|10 phút|thử lại sau/i.test(message)){
-          const retry=Number(response.headers.get('Retry-After'));
+          const retry=Number(result.retryAfter ?? response.headers.get('Retry-After'));
           startAuthCooldown(Number.isFinite(retry)&&retry>0?retry:600);
           return;
         }
@@ -410,8 +412,8 @@
       authFeedback(authMode==='register'?'Đã tạo tài khoản và ví MB66 thành công.':'Đăng nhập thành công.','success');
       document.getElementById('passwordPanel').style.display='none';
       if(result.accountId){showWebsiteWallet(result.wallet, result.linked);}else refresh();
-    }catch(e){authFeedback(e.message||'Không thể kết nối máy chủ. Vui lòng kiểm tra mạng và thử lại.','error');}
-    finally{authPending=false;updateAuthButton();}
+    }catch(e){authFeedback(e.name==='AbortError'?'Máy chủ phản hồi quá lâu. Vui lòng kiểm tra trạng thái tài khoản trước khi thử lại.':(e.message||'Không thể kết nối máy chủ.'),'error');}
+    finally{clearTimeout(timeout);authPending=false;updateAuthButton();}
   }
   function loadTelegramWidget(slotId){
     const slot=document.getElementById(slotId);if(slot.dataset.loaded)return;
@@ -427,7 +429,7 @@
     document.getElementById('websiteWallet').style.display='block';
     document.getElementById('siteWalletId').textContent=wallet?.wallet_id||'Đang tải';
     document.getElementById('siteWalletBalance').textContent=Number(wallet?.balance||0).toLocaleString('vi-VN')+' ₫';
-    document.getElementById('siteTelegramStatus').textContent=linked?'Đã liên kết Telegram. Ví Mini App cũ vẫn tách biệt.':'Chưa liên kết Telegram (không bắt buộc).';
+    document.getElementById('siteTelegramStatus').textContent=linked?'Đã liên kết Telegram. Đã dùng chung danh tính MB66; số dư Mini App cũ chưa chuyển sang D1.':'Chưa liên kết Telegram (không bắt buộc).';
     document.getElementById('linkTelegramButton').style.display=linked?'none':'inline-block';
   }
   function showWebLogin(){
