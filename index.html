@@ -124,7 +124,14 @@
   </header>
 
   <div id="message" class="message"></div>
-  <div id="loading" class="card">Đang kết nối với Telegram...</div><button id="retry" class="secondary full" style="display:none" onclick="refresh()">Thử kết nối lại</button>
+  <div id="webLogin" class="card" style="display:none;text-align:center">
+    <h2>Đăng nhập MB66 bằng Telegram</h2>
+    <p class="muted">Dùng tài khoản Telegram đang sử dụng trong Mini App để truy cập chung ví.</p>
+    <div id="telegramLoginWidget"></div>
+    <p class="muted small">Không nhập mật khẩu Telegram trên website MB66.</p>
+  </div>
+  <div id="webAccount" class="card" style="display:none;text-align:right"><span id="webUserLabel"></span> <button class="secondary" onclick="webLogout()">Đăng xuất</button></div>
+  <div id="loading" class="card">Đang kết nối...</div><button id="retry" class="secondary full" style="display:none" onclick="refresh()">Thử kết nối lại</button>
   <div id="app" style="display:none">
     <div class="card">
       <div class="row">
@@ -301,6 +308,41 @@
 
 <script>
   const tg = window.Telegram && window.Telegram.WebApp;
+  const inTelegram = Boolean(tg && tg.initData);
+  const WEB_BOT_USERNAME = 'my_utility_demo_bot'; // Ví dụ: MB66OfficialBot, KHÔNG có @
+  const API_BASE = 'https://mb66-miniapp-api.botismb66-a7c.workers.dev';
+  let webToken = sessionStorage.getItem('mb66_web_session') || '';
+  function authData(){ return inTelegram ? tg.initData : 'WEB_SESSION'; }
+  function webHeaders(){return !inTelegram && webToken ? {'Authorization':'Bearer '+webToken} : {};}
+  function showWebLogin(){
+    document.getElementById('loading').style.display='none';
+    document.getElementById('app').style.display='none';
+    document.getElementById('webAccount').style.display='none';
+    document.getElementById('webLogin').style.display='block';
+    const slot=document.getElementById('telegramLoginWidget');
+    if(slot.dataset.loaded)return;
+    slot.dataset.loaded='1';
+    const script=document.createElement('script');
+    script.async=true;script.src='https://telegram.org/js/telegram-widget.js?22';
+    script.setAttribute('data-telegram-login',WEB_BOT_USERNAME);
+    script.setAttribute('data-size','large');
+    script.setAttribute('data-radius','8');
+    script.setAttribute('data-onauth','onTelegramWebAuth(user)');
+    script.setAttribute('data-request-access','write');
+    slot.appendChild(script);
+  }
+  window.onTelegramWebAuth=async function(user){
+    try{
+      const response=await fetch(API_BASE+'/auth/telegram',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(user)});
+      const result=await response.json();if(!response.ok||!result.ok)throw Error(result.error||'Đăng nhập thất bại');
+      webToken=result.token;sessionStorage.setItem('mb66_web_session',webToken);
+      document.getElementById('webLogin').style.display='none';refresh();
+    }catch(e){notify(e.message,true);}
+  };
+  async function webLogout(){
+    try{await fetch(API_BASE+'/auth/logout',{method:'POST',headers:{...webHeaders()}});}catch(_){}
+    webToken='';sessionStorage.removeItem('mb66_web_session');showWebLogin();
+  }
   let dashboard = null;
   let busy = false;
 
@@ -340,7 +382,7 @@
 
   
 // GitHub Pages -> Cloudflare Worker -> Apps Script HTTP API -> Google Sheets.
-const API_URL = 'https://mb66-miniapp-api.botismb66-a7c.workers.dev/api';
+const API_URL = API_BASE + '/api';
 
 async function rpc(method, args) {
   const controller = new AbortController();
@@ -348,7 +390,7 @@ async function rpc(method, args) {
   try {
     const response = await fetch(API_URL, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 'Content-Type': 'application/json', ...webHeaders() },
       body: JSON.stringify({ method, args }),
       cache: 'no-store',
       signal: controller.signal
@@ -359,6 +401,7 @@ async function rpc(method, args) {
     } catch (_) {
       throw new Error('Worker không trả về JSON hợp lệ (HTTP ' + response.status + ').');
     }
+    if (response.status===401 && !inTelegram && webToken) { webToken='';sessionStorage.removeItem('mb66_web_session');showWebLogin(); }
     if (!response.ok || !data || data.ok !== true) {
       throw new Error((data && data.error) || 'API lỗi HTTP ' + response.status);
     }
@@ -512,26 +555,20 @@ function callServer(method, args, onSuccess, onFailure) {
 function refresh() {
   const loading = document.getElementById('loading');
 
-  if (!window.Telegram || !window.Telegram.WebApp) {
-    loading.textContent = 'Không thể kết nối với Telegram Web App.';
-    return;
+  if (!inTelegram && !webToken) { showWebLogin(); return; }
+  if (inTelegram) { tg.ready(); tg.expand(); }
+  if (!inTelegram) {
+    document.getElementById('webLogin').style.display='none';
+    document.getElementById('webAccount').style.display='block';
+    document.getElementById('webUserLabel').textContent='Đăng nhập bằng Telegram';
   }
-
-  const tg = window.Telegram.WebApp;
-  tg.ready();
-  tg.expand();
-
-  if (!tg.initData) {
-    loading.textContent =
-      'Telegram chưa cung cấp dữ liệu xác thực. Hãy đóng Mini App và mở lại từ nút Menu của bot.';
-    return;
-  }
+  loading.style.display='block';
 
   loading.textContent = 'Đang tải dữ liệu tài khoản...';
 
   callServer(
     'getDashboard',
-    [tg.initData],
+    [authData()],
     function(data) {
       renderDashboard(data);
     },
@@ -618,10 +655,10 @@ function refresh() {
   txBindMoneyInput('txStakeTai');
   txBindMoneyInput('txStakeXiu');
   function loadTaiXiu(){
-    if(!tg||!tg.initData||txLoading)return;
+    if(!tg||!authData()||txLoading)return;
     txLoading=true;
     const requestStart=Date.now();
-    rpc('txData',[tg.initData]).then(d=>{
+    rpc('txData',[authData()]).then(d=>{
       txDataCache=d;
       txUpdatePresetSelection();
       const t=Date.parse(d.serverTime);if(Number.isFinite(t))txServerOffset=t-(requestStart+Date.now())/2;
@@ -673,7 +710,7 @@ function refresh() {
     if(Date.now()+txServerOffset>=Date.parse(r.closesAt)){notify('Phiên đã đóng.',true);return;}
     if(!confirm('Đặt '+txFmt(stake)+' vào cửa '+pick+' từ ví chính?'))return;
     txSubmitting=true;txTimeLeft();
-    rpc('txBet',[tg.initData,r.id,pick,stake]).then(result=>{
+    rpc('txBet',[authData(),r.id,pick,stake]).then(result=>{
       notify(result.message||'Đã ghi nhận cược.',false);
       loadTaiXiu();
       // Không gọi refresh() vì refresh() có thể làm mới dữ liệu form khác.
@@ -687,18 +724,18 @@ function refresh() {
     if(document.visibilityState==='visible' && document.getElementById('games').classList.contains('active') && !txSubmitting)loadTaiXiu();
   },12000);
   function txVerifyRound(id){
-    callServer('txVerify',[tg.initData,id],result=>{
+    callServer('txVerify',[authData(),id],result=>{
       notify(result.valid?'Kết quả hợp lệ · '+result.dice.join('-')+' = '+result.total:'CẢNH BÁO: Kết quả kiểm chứng không khớp!',!result.valid);
     });
   }
   function txAdminStats(){
-    if(!tg||!tg.initData)return;
-    rpc('txAdminStats',[tg.initData]).then(d=>{
+    if(!inTelegram&&!webToken)return;
+    rpc('txAdminStats',[authData()]).then(d=>{
       const el=document.getElementById('txAdminStats');
       if(el)el.innerHTML='<p>Phiên: '+d.rounds+' · Phiếu: '+d.bets+'</p><p>Tổng cược: '+txFmt(d.staked)+' · Tổng trả: '+txFmt(d.paid)+'</p>';
     }).catch(e=>notify(e.message,true));
   }
-  function txAdminRefresh(){callServer('txAdminRunNow',[tg.initData],r=>{notify(r.message,false);loadTaiXiu();});}
+  function txAdminRefresh(){callServer('txAdminRunNow',[authData()],r=>{notify(r.message,false);loadTaiXiu();});}
 
   function submitTx(event, type) {
     event.preventDefault();
@@ -719,7 +756,7 @@ function refresh() {
     }
 
     callServer('submitTransaction',
-      [tg.initData, type, amount, method, details],
+      [authData(), type, amount, method, details],
       result => {
         notify(result.message || 'Đã gửi yêu cầu.', false);
         event.target.reset();
@@ -732,15 +769,15 @@ function refresh() {
   function saveProfile() {
     const name = document.getElementById('profileName').value;
     const bio = document.getElementById('profileBio').value;
-    callServer('saveMyProfile', [tg.initData, name, bio], () => {
+    callServer('saveMyProfile', [authData(), name, bio], () => {
       notify('Đã lưu hồ sơ.', false);
       refresh();
     });
   }
 
   function saveMemberLinkInfo() {
-    if (!tg || !tg.initData) { notify('Hãy mở ứng dụng trong Telegram.', true); return; }
-    const args = [tg.initData,
+    if (!inTelegram && !webToken) { notify('Vui lòng đăng nhập bằng Telegram.', true); return; }
+    const args = [authData(),
       document.getElementById('memberPhone').value,
       document.getElementById('memberBankName').value,
       document.getElementById('memberBankAccount').value,
@@ -753,8 +790,8 @@ function refresh() {
   }
 
   function loadAdmin() {
-    if (!tg || !tg.initData) return;
-    callServer('getAdminData', [tg.initData], data => {
+    if (!inTelegram && !webToken) return;
+    callServer('getAdminData', [authData()], data => {
       const list = data.pending || [];
       const el = document.getElementById('adminList');
 
@@ -794,7 +831,7 @@ function refresh() {
     if (!window.confirm(confirmText)) return;
 
     callServer('reviewTransaction',
-      [tg.initData, id, decision, note],
+      [authData(), id, decision, note],
       result => {
         notify(result.message || 'Đã cập nhật.', false);
         loadAdmin();
