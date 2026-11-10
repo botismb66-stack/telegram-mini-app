@@ -709,7 +709,7 @@ function refresh() {
     const r=txDataCache&&txDataCache.current;
     const left=r?Math.max(0,Math.ceil((Date.parse(r.closesAt)-(Date.now()+txServerOffset))/1000)):0;
     const el=document.getElementById('txCountdown');if(el)el.textContent=r?String(left):'--';
-    document.querySelectorAll('.txBetButton').forEach(b=>b.disabled=txSubmitting||!r||left===0);
+    document.querySelectorAll('.txBetButton').forEach(b=>b.disabled=(!inTelegram)||txSubmitting||!r||left===0);
   }
   // Dấu phẩy phân cách hàng nghìn: 1000 -> 1,000; không đổi giá trị.
   function txFormatThousands(raw){
@@ -768,14 +768,14 @@ function refresh() {
   txBindMoneyInput('txStakeTai');
   txBindMoneyInput('txStakeXiu');
   function loadTaiXiu(){
-    if(!tg||!authData()||txLoading)return;
+    if(txLoading)return;
     txLoading=true;
     const requestStart=Date.now();
-    rpc('txData',[authData()]).then(d=>{
+    rpc(inTelegram?'txData':'txPublicData',inTelegram?[authData()]:[]).then(d=>{
       txDataCache=d;
       txUpdatePresetSelection();
       const t=Date.parse(d.serverTime);if(Number.isFinite(t))txServerOffset=t-(requestStart+Date.now())/2;
-      document.getElementById('txBalance').textContent=txFmt(d.balance);
+      document.getElementById('txBalance').textContent=d.publicOnly?'Chưa kết nối ví':txFmt(d.balance);
       const stats=d.roundTotals||{};
       const moneyStat=(id,value)=>{const el=document.getElementById(id);if(el)el.textContent=txFmt(value||0);};
       moneyStat('txTaiStakeTotal',stats.taiStake);
@@ -816,6 +816,7 @@ function refresh() {
   }
   function txPlaceBet(pick){
     txActivePick=pick;txUpdatePresetSelection();
+    if(!inTelegram){notify('Chế độ xem trên website: ví chung chưa được kích hoạt. Không thể đặt cược.',true);return;}
     if(txSubmitting||!txDataCache||!txDataCache.current)return;
     const r=txDataCache.current;
     const stake=txParseStake(document.getElementById(pick==='TAI'?'txStakeTai':'txStakeXiu').value);
