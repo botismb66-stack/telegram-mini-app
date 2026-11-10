@@ -117,6 +117,11 @@
 
 .public-home{margin-top:14px}.hero{padding:30px 22px;background:linear-gradient(135deg,#152138,#273b58);border-radius:18px;color:#fff}.hero .eyebrow{font-size:11px;letter-spacing:2px;color:#ffdb67;font-weight:800}.hero h2{font-size:29px;margin:16px 0 10px;color:#ffdf79}.hero p{line-height:1.7;color:#d9e3f2}.hero-actions{display:flex;gap:10px;margin-top:22px}.hero-actions button{flex:1;background:#cf3729;color:white;border:0}.hero-actions .secondary{background:#fff0b4;color:#4d2700}.features{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin:14px 0}.features>div{display:flex;flex-direction:column;gap:8px;background:white;border:1px solid #e8e9ee;border-radius:14px;padding:16px 9px;text-align:center;font-size:23px}.features strong{font-size:13px}.features span{font-size:11px;color:#6c7485;line-height:1.4}#passwordPanel label{display:block;margin:12px 0;font-weight:600}#passwordPanel input{display:block;width:100%;padding:12px;border:1px solid #d5d9e2;border-radius:9px;margin-top:7px;font-size:15px}#telegramWidgetPassword{margin:14px 0}#webLogin{text-align:center}@media(max-width:420px){.hero h2{font-size:24px}.features{gap:6px}.features>div{padding:13px 5px}}
 
+  /* Website accounts: public game view, separate from legacy Telegram wallet */
+  body.web-game-mode #app > .card, body.web-game-mode #app > .balance,
+  body.web-game-mode #app > .tabs, body.web-game-mode #app > .section:not(#games) { display:none !important; }
+  body.web-game-mode #app #games { display:block !important; }
+  body.web-game-mode .txBetButton { display:none !important; }
   </style>
 </head>
 <body>
@@ -369,6 +374,7 @@
     updateAuthButton();
   }
   function showHome(){
+    document.body.classList.remove('web-game-mode');
     ['publicHome','passwordPanel','webLogin','app','webAccount','websiteWallet','loading','retry'].forEach(id=>document.getElementById(id).style.display='none');
     document.getElementById('publicHome').style.display='block';
   }
@@ -426,7 +432,12 @@
   }
   function showWebsiteWallet(wallet,linked){
     ['publicHome','passwordPanel','webLogin','app','webAccount','websiteWallet','loading','retry'].forEach(id=>document.getElementById(id).style.display='none');
+    document.body.classList.add('web-game-mode');
     document.getElementById('websiteWallet').style.display='block';
+    document.getElementById('app').style.display='block';
+    document.querySelectorAll('.section').forEach(el=>el.classList.remove('active'));
+    document.getElementById('games').classList.add('active');
+    loadTaiXiu();
     document.getElementById('siteWalletId').textContent=wallet?.wallet_id||'Đang tải';
     document.getElementById('siteWalletBalance').textContent=Number(wallet?.balance||0).toLocaleString('vi-VN')+' ₫';
     document.getElementById('siteTelegramStatus').textContent=linked?'Đã liên kết Telegram. Đã dùng chung danh tính MB66; số dư Mini App cũ chưa chuyển sang D1.':'Chưa liên kết Telegram (không bắt buộc).';
@@ -838,6 +849,7 @@ function refresh() {
     if(document.visibilityState==='visible' && document.getElementById('games').classList.contains('active') && !txSubmitting)loadTaiXiu();
   },12000);
   function txVerifyRound(id){
+    if(!inTelegram){notify('Kiểm chứng trực tiếp hiện chỉ hỗ trợ trong Telegram; dữ liệu phiên vẫn được đồng bộ từ GAS.',true);return;}
     callServer('txVerify',[authData(),id],result=>{
       notify(result.valid?'Kết quả hợp lệ · '+result.dice.join('-')+' = '+result.total:'CẢNH BÁO: Kết quả kiểm chứng không khớp!',!result.valid);
     });
