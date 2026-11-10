@@ -117,11 +117,19 @@
 
 .public-home{margin-top:14px}.hero{padding:30px 22px;background:linear-gradient(135deg,#152138,#273b58);border-radius:18px;color:#fff}.hero .eyebrow{font-size:11px;letter-spacing:2px;color:#ffdb67;font-weight:800}.hero h2{font-size:29px;margin:16px 0 10px;color:#ffdf79}.hero p{line-height:1.7;color:#d9e3f2}.hero-actions{display:flex;gap:10px;margin-top:22px}.hero-actions button{flex:1;background:#cf3729;color:white;border:0}.hero-actions .secondary{background:#fff0b4;color:#4d2700}.features{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin:14px 0}.features>div{display:flex;flex-direction:column;gap:8px;background:white;border:1px solid #e8e9ee;border-radius:14px;padding:16px 9px;text-align:center;font-size:23px}.features strong{font-size:13px}.features span{font-size:11px;color:#6c7485;line-height:1.4}#passwordPanel label{display:block;margin:12px 0;font-weight:600}#passwordPanel input{display:block;width:100%;padding:12px;border:1px solid #d5d9e2;border-radius:9px;margin-top:7px;font-size:15px}#telegramWidgetPassword{margin:14px 0}#webLogin{text-align:center}@media(max-width:420px){.hero h2{font-size:24px}.features{gap:6px}.features>div{padding:13px 5px}}
 
-  /* Website accounts: public game view, separate from legacy Telegram wallet */
-  body.web-game-mode #app > .card, body.web-game-mode #app > .balance,
-  body.web-game-mode #app > .tabs, body.web-game-mode #app > .section:not(#games) { display:none !important; }
-  body.web-game-mode #app #games { display:block !important; }
+  /* Website account: show navigation, keep Telegram wallet operations separate */
+  body.web-game-mode #app > .card, body.web-game-mode #app > .balance { display:none !important; }
+  body.web-game-mode #app .tabs { display:flex !important; }
+  body.web-game-mode #app .section { display:none !important; }
+  body.web-game-mode #app .section.active { display:block !important; }
+  body.web-game-mode #app #adminTab { display:none !important; }
   body.web-game-mode .txBetButton { display:none !important; }
+  .web-only { display:none; }
+  body.web-game-mode .web-only { display:block; }
+  body.web-game-mode .telegram-only { display:none !important; }
+  .web-notice { padding:14px; border:1px solid #e4d6b0; border-radius:12px; background:#fff9e9; color:#6d5420; line-height:1.6; }
+  .web-shortcuts { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:10px; margin-top:14px; }
+  .web-shortcuts button { background:#e9efff; color:#2449bd; }
   </style>
 </head>
 <body>
@@ -196,6 +204,18 @@
     </div>
 
     <section id="home" class="section active">
+      <div class="web-only card">
+        <h2>Tổng quan tài khoản website</h2>
+        <p class="muted">Số dư và mã ví website được hiển thị ở phía trên. Ví Telegram và ví website chưa gộp.</p>
+        <div class="web-shortcuts">
+          <button onclick="showTab('deposit')">＋ Nạp tiền</button>
+          <button onclick="showTab('withdraw')">↗ Rút tiền</button>
+          <button onclick="showTab('history')">🧾 Lịch sử</button>
+          <button onclick="showTab('games')">🎲 Tài/Xỉu</button>
+          <button onclick="showTab('profile')">👤 Hồ sơ</button>
+        </div>
+      </div>
+      <div class="telegram-only">
       <div class="card">
         <h2>Thao tác nhanh</h2>
         <div class="grid">
@@ -210,9 +230,12 @@
         </div>
         <div id="recentHistory"></div>
       </div>
+      </div>
     </section>
 
     <section id="deposit" class="section">
+      <div class="web-only card"><h2>Nạp tiền website</h2><p class="web-notice">Chức năng gửi yêu cầu nạp tiền bằng ví website chưa được kết nối với API D1. Không chuyển khoản theo thông tin ví Telegram bên dưới.</p></div>
+      <div class="telegram-only">
       <div class="card">
         <h2>Yêu cầu nạp tiền</h2>
         <p class="muted">Gửi thông tin nạp tiền. Số dư chỉ thay đổi sau khi quản trị viên duyệt.</p>
@@ -233,9 +256,12 @@
           <button class="primary full" type="submit" id="depositSubmit" disabled>Gửi yêu cầu nạp</button>
         </form>
       </div>
+      </div>
     </section>
 
     <section id="withdraw" class="section">
+      <div class="web-only card"><h2>Rút tiền website</h2><p class="web-notice">Chức năng rút tiền từ ví website chưa được kết nối với API D1. Số dư Telegram không thể rút qua tài khoản website.</p></div>
+      <div class="telegram-only">
       <div class="card">
         <h2>Yêu cầu rút tiền</h2>
         <p class="muted">Yêu cầu sẽ chờ quản trị viên kiểm tra. Số dư không bị trừ cho đến khi duyệt.</p>
@@ -254,12 +280,16 @@
           <button class="primary full" type="submit">Gửi yêu cầu rút</button>
         </form>
       </div>
+      </div>
     </section>
 
     <section id="history" class="section">
+      <div class="web-only card"><h2>Lịch sử website</h2><p class="web-notice">API lịch sử giao dịch của ví website chưa được cung cấp. Dữ liệu giao dịch Telegram không được hiển thị ở đây.</p></div>
+      <div class="telegram-only">
       <div class="card">
         <h2>Lịch sử giao dịch</h2>
         <div id="allHistory"></div>
+      </div>
       </div>
     </section>
 
@@ -295,10 +325,13 @@
       </div>
       <p class="tx-sub">60 giây/phiên · Tài 11–17 · Xỉu 4–10 · Bộ ba đồng số: cả hai cửa thua · Số tiền nhập có dấu phẩy hàng nghìn. Thống kê chỉ tính cược đã xác nhận, trả thưởng bao gồm vốn.</p>
       <div class="card"><h2>20 kết quả gần nhất</h2><div id="txRecent"></div></div>
+      <div class="web-only web-notice" style="margin-top:12px">Website đang ở chế độ xem Tài/Xỉu. Đặt cược bằng ví website chưa được kích hoạt.</div>
       <div class="card"><h2>Lịch sử cược Tài/Xỉu</h2><div id="txHistory"></div></div>
     </section>
 
     <section id="profile" class="section">
+      <div class="web-only card"><h2>Hồ sơ website</h2><p class="web-notice">Tài khoản website đã đăng nhập. Chức năng chỉnh sửa hồ sơ website cần API riêng; biểu mẫu Telegram bên dưới không áp dụng.</p></div>
+      <div class="telegram-only">
       <div class="card">
         <h2>Thông tin hồ sơ</h2>
         <label>Tên hiển thị</label>
@@ -319,6 +352,7 @@
         <label>Tên chủ tài khoản</label>
         <input id="memberBankHolder" maxlength="100" placeholder="NGUYEN VAN A" autocomplete="off">
         <button class="primary full" onclick="saveMemberLinkInfo()">LƯU THÔNG TIN LIÊN KẾT</button>
+      </div>
       </div>
     </section>
 
@@ -436,8 +470,9 @@
     document.getElementById('websiteWallet').style.display='block';
     document.getElementById('app').style.display='block';
     document.querySelectorAll('.section').forEach(el=>el.classList.remove('active'));
-    document.getElementById('games').classList.add('active');
-    loadTaiXiu();
+    document.querySelectorAll('.tabs button').forEach(el=>el.classList.toggle('active',el.dataset.tab==='home'));
+    document.getElementById('home').classList.add('active');
+    document.getElementById('txHistory').innerHTML='<p class="muted">Lịch sử cược website chưa được hỗ trợ.</p>';
     document.getElementById('siteWalletId').textContent=wallet?.wallet_id||'Đang tải';
     document.getElementById('siteWalletBalance').textContent=Number(wallet?.balance||0).toLocaleString('vi-VN')+' ₫';
     document.getElementById('siteTelegramStatus').textContent=linked?'Đã liên kết Telegram. Đã dùng chung danh tính MB66; số dư Mini App cũ chưa chuyển sang D1.':'Chưa liên kết Telegram (không bắt buộc).';
@@ -559,7 +594,7 @@ function callServer(method, args, onSuccess, onFailure) {
     });
     document.getElementById(tab).classList.add('active');
     if (tab === 'games' || tab === 'admin') loadTaiXiu();
-    if (tab === 'admin' && dashboard && dashboard.roles && dashboard.roles.finance) loadAdmin();
+    if (tab === 'admin' && dashboard && dashboard.roles && dashboard.roles.finance && inTelegram) loadAdmin();
   }
 
   document.querySelectorAll('.tabs button').forEach(btn => {
@@ -855,16 +890,17 @@ function refresh() {
     });
   }
   function txAdminStats(){
-    if(!inTelegram&&!webToken)return;
+    if(!inTelegram)return;
     rpc('txAdminStats',[authData()]).then(d=>{
       const el=document.getElementById('txAdminStats');
       if(el)el.innerHTML='<p>Phiên: '+d.rounds+' · Phiếu: '+d.bets+'</p><p>Tổng cược: '+txFmt(d.staked)+' · Tổng trả: '+txFmt(d.paid)+'</p>';
     }).catch(e=>notify(e.message,true));
   }
-  function txAdminRefresh(){callServer('txAdminRunNow',[authData()],r=>{notify(r.message,false);loadTaiXiu();});}
+  function txAdminRefresh(){if(!inTelegram)return;callServer('txAdminRunNow',[authData()],r=>{notify(r.message,false);loadTaiXiu();});}
 
   function submitTx(event, type) {
     event.preventDefault();
+    if (!inTelegram) { notify('Giao dịch ví website chưa được kích hoạt.', true); return; }
     if (busy) return;
     if (type === 'deposit' && document.getElementById('depositSubmit').dataset.configured !== '1') {
       notify('Chưa cấu hình tài khoản nhận tiền.', true);
@@ -893,6 +929,7 @@ function refresh() {
   }
 
   function saveProfile() {
+    if (!inTelegram) { notify('Chỉnh sửa hồ sơ website chưa được kết nối API.', true); return; }
     const name = document.getElementById('profileName').value;
     const bio = document.getElementById('profileBio').value;
     callServer('saveMyProfile', [authData(), name, bio], () => {
@@ -902,7 +939,7 @@ function refresh() {
   }
 
   function saveMemberLinkInfo() {
-    if (!inTelegram && !webToken) { notify('Vui lòng đăng nhập bằng Telegram.', true); return; }
+    if (!inTelegram) { notify('Vui lòng đăng nhập bằng Telegram.', true); return; }
     const args = [authData(),
       document.getElementById('memberPhone').value,
       document.getElementById('memberBankName').value,
@@ -916,7 +953,7 @@ function refresh() {
   }
 
   function loadAdmin() {
-    if (!inTelegram && !webToken) return;
+    if (!inTelegram) return;
     callServer('getAdminData', [authData()], data => {
       const list = data.pending || [];
       const el = document.getElementById('adminList');
@@ -948,6 +985,7 @@ function refresh() {
   }
 
   function reviewTx(id, decision) {
+    if (!inTelegram) { notify('Chức năng này chỉ dành cho quản trị Telegram.', true); return; }
     const noteEl = document.getElementById('note-' + id);
     const note = noteEl ? noteEl.value : '';
     const confirmText = decision === 'approved'
